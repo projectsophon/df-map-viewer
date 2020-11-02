@@ -24,23 +24,20 @@ async function start() {
   const endTimeSeconds = 1609372800;
 
   const db = multileveldown.client({ valueEncoding: 'json', retry: true });
-  const websocketStream = new WebSocket('ws://localhost:8082');
+  const websocketStream = new WebSocket(import.meta.env.DB_CONNECTION_URL);
   const lre = LevelRangeEmitter.client(db);
   lre.session(db.connect(), websocketStream);
 
   const chunkStore = new LocalStorageManager(db);
 
   lre.emitter.subscribe((key, type) => {
-    console.log('updated', key, type);
     if (type === 'put') {
       db.get(key, (err, value) => {
         if (err) {
-          console.error('Failed to store chunk in memory:', key);
           console.error(err);
           return;
         }
 
-        console.log('Storing chunk:', key, value);
         chunkStore.updateChunk(toExploredChunk(value), true);
       });
     }

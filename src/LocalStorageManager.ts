@@ -260,11 +260,9 @@ export class LocalStorageManager implements ChunkStore {
           this.updateChunk(toExploredChunk(chunk), true);
         })
         .on('error', (err) => {
-          console.error('error occurred sinking map', err);
           reject(err);
         })
         .on('end', (data) => {
-          console.log('Initial map has been sunk', data);
           resolve();
         });
     });

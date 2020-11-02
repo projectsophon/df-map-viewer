@@ -11,5 +11,8 @@ module.exports = {
   optimizeDeps: {
     include: ['simple-websocket/simplewebsocket.min.js'],
     exclude: ['simple-websocket']
-  }
+  },
+  env: {
+    DB_CONNECTION_URL: 'ws://localhost:8082'
+  },
 };
