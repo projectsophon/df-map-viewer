@@ -5,34 +5,21 @@ import {
   Location,
   WorldCoords,
 } from './GlobalTypes';
-import {
-  EthAddress,
-  contractAddress,
-} from './Contract';
-import { openDB, IDBPDatabase } from 'idb';
 import _, { Cancelable } from 'lodash';
-import stringify from 'json-stable-stringify';
+import type { LevelUp } from 'levelup'
 
 const MAX_CHUNK_SIZE = 256;
 
-enum ObjectStore {
-  DEFAULT = 'default',
-  BOARD = 'knownBoard',
-  UNCONFIRMED_ETH_TXS = 'unminedEthTxs',
-}
-
 enum DBActionType {
-  UPDATE,
-  DELETE,
+  UPDATE = 'put',
+  DELETE = 'del',
 }
 
 interface DBAction {
   type: DBActionType;
-  dbKey: string;
-  dbValue?: ExploredChunkData;
+  key: string;
+  value?: ExploredChunkData;
 }
-
-type DBTx = DBAction[];
 
 export interface ChunkStore {
   hasMinedChunk: (chunkFootprint: ChunkFootprint) => boolean;
@@ -227,112 +214,66 @@ export const addToChunkMap = (
 
 
 export class LocalStorageManager implements ChunkStore {
-  private db: IDBPDatabase;
-  private cached: DBTx[];
+  private db: LevelUp;
+  private cached: DBAction[];
   private throttledSaveChunkCacheToDisk: (() => Promise<void>) & Cancelable;
   private nUpdatesLastTwoMins = 0; // we save every 5s, unless this goes above 50
   private chunkMap: Map<string, ExploredChunkData>;
-  private confirmedTxHashes: Set<string>;
-  private account: EthAddress;
 
-  constructor(db: IDBPDatabase, account: EthAddress) {
+  constructor(db: LevelUp) {
     this.db = db;
     this.cached = [];
-    this.confirmedTxHashes = new Set<string>();
     this.throttledSaveChunkCacheToDisk = _.throttle(
       this.saveChunkCacheToDisk,
       2000 // TODO
     );
     this.chunkMap = new Map<string, ExploredChunkData>();
-    this.account = account;
   }
 
   destroy(): void {
     // no-op; we don't actually destroy the instance, we leave the db connection open in case we need it in the future
   }
 
-  static async create(account: EthAddress): Promise<LocalStorageManager> {
-    const db = await openDB(`darkforest-${contractAddress}-${account}`, 1, {
-      upgrade(db) {
-        db.createObjectStore(ObjectStore.DEFAULT);
-        db.createObjectStore(ObjectStore.BOARD);
-        db.createObjectStore(ObjectStore.UNCONFIRMED_ETH_TXS);
-      },
+  private async bulkSetKeyInCollection(updateChunkTxs: DBAction[]): Promise<void> {
+    const chunks = updateChunkTxs.map((chunk) => {
+      if (chunk.value) {
+        return { ...chunk, value: toLSMChunk(chunk.value) }
+      } else {
+        return chunk;
+      }
     });
-    const localStorageManager = new LocalStorageManager(db, account);
-
-    await localStorageManager.loadIntoMemory();
-
-    return localStorageManager;
-  }
-
-  private async getKey(key: string): Promise<string | null | undefined> {
-    return await this.db.get(
-      ObjectStore.DEFAULT,
-      `${contractAddress}-${this.account}-${key}`
-    );
-  }
-
-  private async setKey(key: string, value: string): Promise<void> {
-    await this.db.put(
-      ObjectStore.DEFAULT,
-      value,
-      `${contractAddress}-${this.account}-${key}`
-    );
-  }
-
-  private async bulkSetKeyInCollection(
-    updateChunkTxs: DBTx[],
-    collection: ObjectStore
-  ): Promise<void> {
-    const tx = this.db.transaction(collection, 'readwrite');
-    updateChunkTxs.forEach((updateChunkTx) => {
-      updateChunkTx.forEach(({ type, dbKey: key, dbValue: value }) => {
-        if (type === DBActionType.UPDATE) {
-          tx.store.put(toLSMChunk(value as ExploredChunkData), key);
-        } else if (type === DBActionType.DELETE) {
-          tx.store.delete(key);
+    await new Promise((resolve, reject) => {
+      this.db.batch(chunks as any, (err) => {
+        if (err) {
+          return reject(err);
         }
+
+        resolve()
       });
     });
-    await tx.done;
   }
 
-  private async loadIntoMemory(): Promise<void> {
-    // we can't bulk get all chunks, since idb will crash/hang
-    // we also can't assign random non-primary keys and query on ranges
-    // so we append a random alphanumeric character to the front of keys
-    // and then bulk query for keys starting with 0, then 1, then 2, etc.
-    const borders = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ~';
-    for (let idx = 0; idx < borders.length - 1; idx += 1) {
-      (
-        await this.db.getAll(
-          ObjectStore.BOARD,
-          IDBKeyRange.bound(borders[idx], borders[idx + 1], false, true)
-        )
-      ).forEach((chunk: LSMChunkData) => {
-        this.updateChunk(toExploredChunk(chunk), true);
-      });
-    }
+  async loadIntoMemory(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.db.createReadStream()
+        .on('data', ({ key, value: chunk }) => {
+          this.updateChunk(toExploredChunk(chunk), true);
+        })
+        .on('error', (err) => {
+          console.error('error occurred sinking map', err);
+          reject(err);
+        })
+        .on('end', (data) => {
+          console.log('Initial map has been sunk', data);
+          resolve();
+        });
+    });
   }
 
   private async saveChunkCacheToDisk() {
     const toSave = [...this.cached]; // make a copy
     this.cached = [];
-    await this.bulkSetKeyInCollection(toSave, ObjectStore.BOARD);
-  }
-
-  public async getHomeCoords(): Promise<WorldCoords | null> {
-    const homeCoords = await this.getKey('homeCoords');
-    if (homeCoords) {
-      const parsed = JSON.parse(homeCoords) as { x: number; y: number };
-      return parsed;
-    }
-    return null;
-  }
-
-  public async setHomeCoords(coords: WorldCoords): Promise<void> {
-    await this.setKey('homeCoords', stringify(coords));
+    await this.bulkSetKeyInCollection(toSave);
   }
 
   public hasMinedChunk(chunkLoc: ChunkFootprint): boolean {
@@ -361,14 +302,14 @@ export class LocalStorageManager implements ChunkStore {
     if (this.hasMinedChunk(e.chunkFootprint)) {
       return;
     }
-    const tx: DBTx = [];
+    const tx: DBAction[] = [];
 
     // if this is a mega-chunk, delete all smaller chunks inside of it
     const minedSubChunks = this.getMinedSubChunks(e);
     for (const subChunk of minedSubChunks) {
       tx.push({
         type: DBActionType.DELETE,
-        dbKey: getChunkKey(subChunk.chunkFootprint),
+        key: getChunkKey(subChunk.chunkFootprint),
       });
     }
 
@@ -379,14 +320,14 @@ export class LocalStorageManager implements ChunkStore {
       (chunk) => {
         tx.push({
           type: DBActionType.UPDATE,
-          dbKey: getChunkKey(chunk.chunkFootprint),
-          dbValue: chunk,
+          key: getChunkKey(chunk.chunkFootprint),
+          value: chunk,
         });
       },
       (chunk) => {
         tx.push({
           type: DBActionType.DELETE,
-          dbKey: getChunkKey(chunk.chunkFootprint),
+          key: getChunkKey(chunk.chunkFootprint),
         });
       },
       MAX_CHUNK_SIZE
@@ -394,10 +335,10 @@ export class LocalStorageManager implements ChunkStore {
 
     // modify in-memory store
     for (const action of tx) {
-      if (action.type === DBActionType.UPDATE && action.dbValue) {
-        this.chunkMap.set(action.dbKey, action.dbValue);
+      if (action.type === DBActionType.UPDATE && action.value) {
+        this.chunkMap.set(action.key, action.value);
       } else if (action.type === DBActionType.DELETE) {
-        this.chunkMap.delete(action.dbKey);
+        this.chunkMap.delete(action.key);
       }
     }
 
@@ -406,7 +347,7 @@ export class LocalStorageManager implements ChunkStore {
       return;
     }
 
-    this.cached.push(tx);
+    this.cached = [...this.cached, ...tx];
 
     // save chunks every 5s if we're just starting up, or 30s once we're moving
     this.recomputeSaveThrottleAfterUpdate();

@@ -1,12 +1,15 @@
 import { CanvasRenderer } from './CanvasRenderer';
-import { emptyAddress, address, Contract } from './Contract';
-import { LocalStorageManager } from './LocalStorageManager';
+import { Contract } from './Contract';
+import { LocalStorageManager, toExploredChunk } from './LocalStorageManager';
 import {
   PlanetHelper,
   VoyageContractData,
   PlanetVoyageIdMap,
 } from './PlanetHelper';
 import { Viewport } from './Viewport';
+import multileveldown from '../vendor/multileveldown-browser';
+import LevelRangeEmitter from '../vendor/level-range-emitter-browser';
+import WebSocket from 'simple-websocket/simplewebsocket.min';
 
 async function start() {
   const canvas = document.querySelector('canvas');
@@ -19,31 +22,54 @@ async function start() {
   const homeCoords = { x: 0, y: 0 };
   const widthInWorldUnits = 250;
   const endTimeSeconds = 1609372800;
-  // TODO: Use mine for testing
-  const myAddress = emptyAddress;
 
-  const chunkStore = await LocalStorageManager.create(myAddress);
+  const db = multileveldown.client({ valueEncoding: 'json', retry: true });
+  const websocketStream = new WebSocket('ws://localhost:8082');
+  const lre = LevelRangeEmitter.client(db);
+  lre.session(db.connect(), websocketStream);
 
-  // initialize dependencies according to a DAG
+  const chunkStore = new LocalStorageManager(db);
 
-  // first we initialize the ContractsAPI and get the user's eth account, and load contract constants + state
+  lre.emitter.subscribe((key, type) => {
+    console.log('updated', key, type);
+    if (type === 'put') {
+      db.get(key, (err, value) => {
+        if (err) {
+          console.error('Failed to store chunk in memory:', key);
+          console.error(err);
+          return;
+        }
+
+        console.log('Storing chunk:', key, value);
+        chunkStore.updateChunk(toExploredChunk(value), true);
+      });
+    }
+  });
+
   const contractsAPI = await Contract.create();
 
-  // get data from the contract
-  const contractConstants = await contractsAPI.getConstants();
+  const [
+    _mapLoaded,
+    contractConstants,
+    worldRadius,
+    allArrivals,
+    planets,
+  ] = await Promise.all([
+    chunkStore.loadIntoMemory(),
+    contractsAPI.getConstants(),
+    contractsAPI.getWorldRadius(),
+    contractsAPI.getAllArrivals(),
+    contractsAPI.getPlanets(),
+  ]);
+
   const perlinThresholds = [
     contractConstants.PERLIN_THRESHOLD_1,
     contractConstants.PERLIN_THRESHOLD_2,
   ];
-  // const players = await contractsAPI.getPlayers();
-  const worldRadius = await contractsAPI.getWorldRadius();
 
   const arrivals: VoyageContractData = {};
   const planetVoyageIdMap: PlanetVoyageIdMap = {};
-  const allArrivals = await contractsAPI.getAllArrivals();
-  // fetch planets after allArrivals, since an arrival to a new planet might be sent
-  // while we are fetching
-  const planets = await contractsAPI.getPlanets();
+
   planets.forEach((planet, locId) => {
     if (planets.has(locId)) {
       planetVoyageIdMap[locId] = [];
