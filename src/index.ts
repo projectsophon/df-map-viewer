@@ -7,8 +7,8 @@ import {
   PlanetVoyageIdMap,
 } from './PlanetHelper';
 import { Viewport } from './Viewport';
-import multileveldown from '../vendor/multileveldown-browser';
-import LevelRangeEmitter from '../vendor/level-range-emitter-browser';
+import multileveldown from '/vendor/multileveldown-browser.js';
+import LevelRangeEmitter from '/vendor/level-range-emitter-browser.js';
 import WebSocket from 'simple-websocket/simplewebsocket.min';
 
 async function start() {
@@ -19,12 +19,25 @@ async function start() {
     return;
   }
 
+  const ctx = canvas.getContext('2d');
+
+  if (ctx) {
+    canvas.height = window.innerHeight;
+    canvas.width = window.innerWidth;
+
+    ctx.font = `18px sans-serif`;
+    ctx.textBaseline = 'top';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'black';
+    ctx.fillText('Loading the contract & map data. This will take awhile.', canvas.width / 2, canvas.height / 2);
+  }
+
   const homeCoords = { x: 0, y: 0 };
   const widthInWorldUnits = 250;
   const endTimeSeconds = 1609372800;
 
   const db = multileveldown.client({ valueEncoding: 'json', retry: true });
-  const websocketStream = new WebSocket(import.meta.env.DB_CONNECTION_URL);
+  const websocketStream = new WebSocket(import.meta.env.VITE_DB_CONNECTION_URL);
   const lre = LevelRangeEmitter.client(db);
   lre.session(db.connect(), websocketStream);
 
