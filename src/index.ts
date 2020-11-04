@@ -7,8 +7,8 @@ import {
   PlanetVoyageIdMap,
 } from './PlanetHelper';
 import { Viewport } from './Viewport';
-import multileveldown from '/vendor/multileveldown-browser';
-import LevelRangeEmitter from '/vendor/level-range-emitter-browser';
+import multileveldown from '/vendor/multileveldown-browser.js';
+import LevelRangeEmitter from '/vendor/level-range-emitter-browser.js';
 import WebSocket from 'simple-websocket/simplewebsocket.min';
 
 async function start() {
@@ -37,7 +37,7 @@ async function start() {
   const endTimeSeconds = 1609372800;
 
   const db = multileveldown.client({ valueEncoding: 'json', retry: true });
-  const websocketStream = new WebSocket(import.meta.env.DB_CONNECTION_URL);
+  const websocketStream = new WebSocket(import.meta.env.VITE_DB_CONNECTION_URL);
   const lre = LevelRangeEmitter.client(db);
   lre.session(db.connect(), websocketStream);
 

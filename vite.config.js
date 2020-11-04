@@ -13,12 +13,12 @@ module.exports = {
     exclude: ['simple-websocket']
   },
   env: {
-    DB_CONNECTION_URL: 'ws://157.230.184.36'
+    VITE_DB_CONNECTION_URL: 'ws://157.230.184.36'
   },
   rollupInputOptions: {
     external: [
-      '/vendor/level-range-emitter-browser',
-      '/vendor/multileveldown-browser',
+      '/vendor/level-range-emitter-browser.js',
+      '/vendor/multileveldown-browser.js',
     ],
   },
 };
