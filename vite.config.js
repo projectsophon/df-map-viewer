@@ -13,6 +13,6 @@ module.exports = {
     exclude: ['simple-websocket']
   },
   env: {
-    DB_CONNECTION_URL: 'ws://localhost:8082'
+    DB_CONNECTION_URL: 'ws://157.230.184.36'
   },
 };
