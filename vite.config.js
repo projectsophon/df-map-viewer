@@ -15,4 +15,10 @@ module.exports = {
   env: {
     DB_CONNECTION_URL: 'ws://157.230.184.36'
   },
+  rollupInputOptions: {
+    external: [
+      '/vendor/level-range-emitter-browser',
+      '/vendor/multileveldown-browser',
+    ],
+  },
 };

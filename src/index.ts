@@ -7,8 +7,8 @@ import {
   PlanetVoyageIdMap,
 } from './PlanetHelper';
 import { Viewport } from './Viewport';
-import multileveldown from '../vendor/multileveldown-browser';
-import LevelRangeEmitter from '../vendor/level-range-emitter-browser';
+import multileveldown from '/vendor/multileveldown-browser';
+import LevelRangeEmitter from '/vendor/level-range-emitter-browser';
 import WebSocket from 'simple-websocket/simplewebsocket.min';
 
 async function start() {
@@ -17,6 +17,19 @@ async function start() {
   if (!canvas) {
     console.error('Need a canvas');
     return;
+  }
+
+  const ctx = canvas.getContext('2d');
+
+  if (ctx) {
+    canvas.height = window.innerHeight;
+    canvas.width = window.innerWidth;
+
+    ctx.font = `18px sans-serif`;
+    ctx.textBaseline = 'top';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'black';
+    ctx.fillText('Loading the contract & map data. This will take awhile.', canvas.width / 2, canvas.height / 2);
   }
 
   const homeCoords = { x: 0, y: 0 };

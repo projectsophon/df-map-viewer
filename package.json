@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "vite --port 8080"
+    "start": "vite --port 8080",
+    "build": "vite build"
   },
   "repository": {
     "type": "git",
