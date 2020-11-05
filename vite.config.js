@@ -13,7 +13,7 @@ module.exports = {
     exclude: ['simple-websocket']
   },
   env: {
-    VITE_DB_CONNECTION_URL: 'ws://157.230.184.36'
+    VITE_DB_CONNECTION_URL: 'ws://map.projectsophon.com/ws'
   },
   rollupInputOptions: {
     external: [
