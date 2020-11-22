@@ -243,21 +243,21 @@ export class CanvasRenderer {
     const radius = this.planetHelper.getRadiusOfPlanetLevel(planetLevel);
     const radiusReal = this.viewport.worldToCanvasDist(radius);
 
-    const minRadius = 1;
+    // const minRadius = 1;
     if (!isSelected || !isVeryBig) {
       // always show selected and very big
-      if (radiusReal < minRadius) return; // detail level fallback
+      // if (radiusReal < minRadius) return; // detail level fallback
       if (detailLevel === null || detailLevel < this.viewport.getDetailLevel()) {
         return; // so we don't call getPlanetWithLocation, which triggers updates every second
       }
     }
 
-    if (isSelected || isVeryBig) {
-      this.ctx.globalAlpha = 1;
-    } else {
-      const alpha = Math.max(0, 0.25 * (radiusReal - minRadius + 1));
-      this.ctx.globalAlpha = Math.min(alpha, 1);
-    }
+    // if (isSelected || isVeryBig) {
+    this.ctx.globalAlpha = 1;
+    // } else {
+    //   const alpha = Math.max(0, 0.25 * (radiusReal - minRadius + 1));
+    //   this.ctx.globalAlpha = Math.min(alpha, 1);
+    // }
 
     const energy = planet ? Math.ceil(planet.energy) : 0;
 
@@ -338,9 +338,9 @@ export class CanvasRenderer {
     const det = this.planetHelper.getPlanetDetailLevel(planet.locationId);
     if (det === null) return;
     if (det > current + 1 || isSelected) {
-      if (!isSelected && !isVeryBig) {
-        this.ctx.globalAlpha = Math.min(0.2 * radiusReal, 1);
-      } // don't need else, already max opacity
+      // if (!isSelected && !isVeryBig) {
+      //   this.ctx.globalAlpha = Math.min(0.2 * radiusReal, 1);
+      // } // don't need else, already max opacity
 
       // const fromPlanet = uiManager.getMouseDownPlanet();
       // const fromCoords = uiManager.getMouseDownCoords();
@@ -354,27 +354,27 @@ export class CanvasRenderer {
       //   fromPlanet.locationId !== toPlanet.locationId &&
       //   toPlanet.locationId === planet.locationId;
       // if (moveHereInProgress || (hasOwner(planet) && energy > 0)) {
-      //   let energyString = energy.toString();
+      if (hasOwner(planet) && energy > 0) {
+        let energyString = energy.toString();
 
-      //   this.drawText(
-      //     energyString,
-      //     15,
-      //     {
-      //       x: center.x,
-      //       y: center.y - 1.1 * radius - (planet.owner ? 0.75 : 0.25),
-      //     },
-      //     getOwnerColor(planet, 1)
-      //   );
-      //   // hp bar 2
-      //   this.drawArcWithCenter(
-      //     center,
-      //     radius * 1.2,
-      //     3,
-      //     (planet.energy / planet.energyCap) * 100,
-      //     getOwnerColor(planet, 1)
-      //   );
-      // } else
-      if (!hasOwner(planet) && energy > 0) {
+        this.drawText(
+          energyString,
+          15,
+          {
+            x: center.x,
+            y: center.y - 1.1 * radius - (planet.owner ? 0.75 : 0.25),
+          },
+          getOwnerColor(planet, 1)
+        );
+        // hp bar 2
+        this.drawArcWithCenter(
+          center,
+          radius * 1.2,
+          3,
+          (planet.energy / planet.energyCap) * 100,
+          getOwnerColor(planet, 1)
+        );
+      } else if (!hasOwner(planet) && energy > 0) {
         const current = this.viewport.getDetailLevel();
         const det = this.planetHelper.getPlanetDetailLevel(planet.locationId);
         if (det === null) return;
