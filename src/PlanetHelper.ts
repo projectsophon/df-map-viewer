@@ -18,6 +18,7 @@ import {
   LocalStorageManager,
 } from './LocalStorageManager';
 import bigInt from 'big-integer';
+import { Timer } from './Timer';
 
 export const hasOwner = (planet: Planet) => {
   // planet.owner should never be null
@@ -119,6 +120,8 @@ export class PlanetHelper {
   // TODO: Should this be tied to PlanetHelper?
   private chunkStore: LocalStorageManager;
 
+  private timer: Timer;
+
   constructor(
     planets: PlanetMap,
     chunkStore: LocalStorageManager,
@@ -126,7 +129,9 @@ export class PlanetHelper {
     unprocessedPlanetArrivalIds: PlanetVoyageIdMap,
     contractConstants: ContractConstants,
     endTimeSeconds: number,
+    timer: Timer,
   ) {
+    this.timer = timer;
     this.chunkStore = chunkStore;
     this.radiusMap = radiusMap();
     this.planets = planets;
@@ -172,7 +177,7 @@ export class PlanetHelper {
     setInterval(() => {
       this.planets.forEach((planet) => {
         if (planet && hasOwner(planet)) {
-          this.updatePlanetToTime(planet, Date.now());
+          this.updatePlanetToTime(planet, this.timer.now());
         }
       });
     }, 120000);
@@ -365,7 +370,7 @@ export class PlanetHelper {
 
     // sort arrivals by timestamp
     arrivals.sort((a, b) => a.arrivalTime - b.arrivalTime);
-    const nowInSeconds = Date.now() / 1000;
+    const nowInSeconds = this.timer.now() / 1000;
     for (const arrival of arrivals) {
       try {
         const fromPlanet = this.planets.get(arrival.fromPlanet);
@@ -381,7 +386,7 @@ export class PlanetHelper {
             const toPlanet = this.planets.get(arrival.toPlanet);
             if (fromPlanet && toPlanet)
               this.arrive(fromPlanet, toPlanet, arrival);
-          }, arrival.arrivalTime * 1000 - Date.now());
+          }, arrival.arrivalTime * 1000 - this.timer.now());
 
           const arrivalWithTimer = {
             arrivalData: arrival,
@@ -619,7 +624,7 @@ export class PlanetHelper {
       energy: barbarians,
       silver,
 
-      lastUpdated: Math.floor(Date.now() / 1000),
+      lastUpdated: Math.floor(this.timer.now() / 1000),
 
       upgradeState: [0, 0, 0],
 
@@ -630,7 +635,7 @@ export class PlanetHelper {
   }
 
   private updatePlanetIfStale(planet: Planet): void {
-    const now = Date.now();
+    const now = this.timer.now();
     if (now / 1000 - planet.lastUpdated > 1) {
       this.updatePlanetToTime(planet, now);
     }

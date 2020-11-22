@@ -1,15 +1,20 @@
 import { CanvasRenderer } from './CanvasRenderer';
-import { Contract } from './Contract';
+import { Contract, ContractsAPIEvent } from './Contract';
 import { LocalStorageManager, toExploredChunk } from './LocalStorageManager';
 import {
   PlanetHelper,
   VoyageContractData,
   PlanetVoyageIdMap,
+  QueuedArrival,
 } from './PlanetHelper';
 import { Viewport } from './Viewport';
+import { Planet } from './GlobalTypes';
+// @ts-ignore
 import multileveldown from '/vendor/multileveldown-browser.js';
+// @ts-ignore
 import LevelRangeEmitter from '/vendor/level-range-emitter-browser.js';
 import WebSocket from 'simple-websocket/simplewebsocket.min';
+import { ReplayTimer } from './Timer';
 
 async function start() {
   const canvas = document.querySelector('canvas');
@@ -32,12 +37,19 @@ async function start() {
     ctx.fillText('Loading the contract & map data. This will take awhile.', canvas.width / 2, canvas.height / 2);
   }
 
-  const homeCoords = { x: 0, y: 0 };
+  // const homeCoords = { x: 0, y: 0 };
+  const homeCoords = {
+    x: 3000,
+    y: 3983
+  };
   const widthInWorldUnits = 250;
   const endTimeSeconds = 1609372800;
 
   const db = multileveldown.client({ valueEncoding: 'json', retry: true });
-  const websocketStream = new WebSocket(import.meta.env.VITE_DB_CONNECTION_URL);
+  const websocketStream = new WebSocket(
+    // @ts-ignore
+    import.meta.env.VITE_DB_CONNECTION_URL
+  );
   const lre = LevelRangeEmitter.client(db);
   lre.session(db.connect(), websocketStream);
 
@@ -58,19 +70,30 @@ async function start() {
 
   const contractsAPI = await Contract.create();
 
+  const eventLogs = await contractsAPI.coreContract.queryFilter(
+    {
+      address: contractsAPI.coreContract.address,
+    },
+    12314144,
+    12314144 + 20000
+  );
+  console.log(eventLogs);
+
   const [
     _mapLoaded,
     contractConstants,
     worldRadius,
-    allArrivals,
-    planets,
+    allArrivals = [] as QueuedArrival[],
+    planets = new Map(),
   ] = await Promise.all([
     chunkStore.loadIntoMemory(),
     contractsAPI.getConstants(),
     contractsAPI.getWorldRadius(),
-    contractsAPI.getAllArrivals(),
-    contractsAPI.getPlanets(),
+    // contractsAPI.getAllArrivals(),
+    // contractsAPI.getPlanets(),
   ]);
+
+  console.log('world radius', worldRadius);
 
   const perlinThresholds = [
     contractConstants.PERLIN_THRESHOLD_1,
@@ -94,6 +117,8 @@ async function start() {
   canvas.height = window.innerHeight;
   canvas.width = window.innerWidth;
 
+  const timer = new ReplayTimer();
+
   const planetHelper = new PlanetHelper(
     planets,
     chunkStore,
@@ -101,7 +126,13 @@ async function start() {
     planetVoyageIdMap,
     contractConstants,
     endTimeSeconds,
+    timer,
   );
+
+  contractsAPI.on(ContractsAPIEvent.PlanetUpdate, async (planet: Planet, arrivals: QueuedArrival[]) => {
+    planetHelper.refreshPlanetAndArrivals(planet, arrivals);
+    console.log(planetHelper.getLocationOfPlanet(planet.locationId));
+  });
 
   const viewport = new Viewport(
     planetHelper,
@@ -117,8 +148,18 @@ async function start() {
     worldRadius,
     perlinThresholds,
     planetHelper,
-    viewport
+    viewport,
+    timer,
   );
+
+  for (const evt of eventLogs) {
+    // console.log(await evt.getBlock());
+    console.log('waiting to process:', evt);
+    await timer.waitForBlockNumber(evt.blockNumber);
+    console.log('now processing:', evt);
+    const args = evt.args || [];
+    contractsAPI.coreContract.emit.apply(contractsAPI.coreContract, [evt.event, ...args, evt]);
+  }
 }
 
 start().then(console.log).catch(console.log);
