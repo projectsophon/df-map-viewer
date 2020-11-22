@@ -30,6 +30,7 @@ import {
 import {
   dfstyles,
 } from './dfstyles';
+import { Timer } from './Timer';
 
 export const formatNumber = (num: number): string => {
   if (num < 1000) return `${num.toFixed(0)}`;
@@ -52,6 +53,7 @@ export const formatNumber = (num: number): string => {
 export class CanvasRenderer {
   planetHelper: PlanetHelper;
   viewport: Viewport;
+  timer: Timer;
 
   zone0ChunkMap: Map<string, ExploredChunkData>;
   zone1ChunkMap: Map<string, ExploredChunkData>;
@@ -73,11 +75,13 @@ export class CanvasRenderer {
     worldRadius: any,
     perlinThresholds: number[],
     planetHelper: PlanetHelper,
-    viewport: Viewport
+    viewport: Viewport,
+    timer: Timer,
   ) {
     this.worldRadius = worldRadius;
     this.planetHelper = planetHelper;
     this.viewport = viewport;
+    this.timer = timer;
 
     this.canvas = canvas;
     const ctx = this.canvas.getContext('2d');
@@ -94,7 +98,7 @@ export class CanvasRenderer {
     this.zone2ChunkMap = new Map<string, ExploredChunkData>();
 
     this.frameCount = 0;
-    this.now = Date.now();
+    this.now = this.timer.now();
     this.selected = null;
 
     this.frame();
@@ -150,7 +154,7 @@ export class CanvasRenderer {
 
     if (this.frameCount % tick === 0) {
       // this.selected = this.gameUIManager.getSelectedPlanet();
-      this.now = Date.now();
+      this.now = this.timer.now();
       this.draw();
     }
     this.frameRequestId = window.requestAnimationFrame(this.frame.bind(this));

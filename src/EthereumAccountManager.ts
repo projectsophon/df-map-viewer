@@ -24,7 +24,10 @@ export class EthereumAccountManager extends events.EventEmitter {
     // const isProd = process.env.NODE_ENV === 'production';
     this.isProd = true;
     if (this.isProd) {
-      url = 'wss://rpc.xdaichain.com/wss';
+      // url = 'wss://rpc.xdaichain.com/wss';
+      // url = 'wss://xdai.poanetwork.dev/wss';
+      // url = 'https://xdai.poanetwork.dev/';
+      url = 'https://xdai-archive.blockscout.com';
     } else {
       url = 'http://localhost:8545';
     }
@@ -38,7 +41,8 @@ export class EthereumAccountManager extends events.EventEmitter {
   public setRpcEndpoint(url: string): void {
     try {
       this.rpcURL = url;
-      const newProvider = new providers.WebSocketProvider(this.rpcURL);
+      // const newProvider = new providers.WebSocketProvider(this.rpcURL);
+      const newProvider = new providers.JsonRpcProvider(this.rpcURL);
       this.provider = newProvider;
       // this.provider.pollingInterval = 8000;
       this.emit('ChangedRPCEndpoint');

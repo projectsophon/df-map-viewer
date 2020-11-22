@@ -326,7 +326,7 @@ export const aggregateBulkGetter = async <T>(
 };
 
 export class Contract extends events.EventEmitter {
-  private coreContract: CoreContract;
+  coreContract: CoreContract;
 
   private constructor(coreContract: CoreContract) {
     super();
@@ -355,42 +355,51 @@ export class Contract extends events.EventEmitter {
   private setupEventListeners(): void {
     // TODO replace these with block polling
     this.coreContract
-      // .on(ContractEvent.PlayerInitialized, async (player, locRaw, _: Event) => {
-      //   const newPlayer: Player = { address: address(player) };
-      //   this.emit(ContractsAPIEvent.PlayerInit, newPlayer);
+      .on(ContractEvent.PlayerInitialized, async (player, locRaw, evt: Event) => {
+        const newPlayer: Player = { address: address(player) };
+        this.emit(ContractsAPIEvent.PlayerInit, newPlayer);
+        // debugger;
 
-      //   const newPlanet: Planet = await this.getPlanet(locRaw);
-      //   this.emit(ContractsAPIEvent.PlanetUpdate, newPlanet);
-      //   this.emit(ContractsAPIEvent.RadiusUpdated);
-      // })
+        const newPlanet: Planet = await this.getPlanet(locRaw, evt.blockNumber);
+        const arrivals = await this.getArrivalsForPlanet(newPlanet, evt.blockNumber);
+        this.emit(ContractsAPIEvent.PlanetUpdate, newPlanet, arrivals);
+        this.emit(ContractsAPIEvent.RadiusUpdated);
+      })
       .on(
         ContractEvent.ArrivalQueued,
-        async (arrivalId: EthersBN, _: Event) => {
+        async (arrivalId: EthersBN, evt: Event) => {
           const arrival: QueuedArrival | null = await this.getArrival(
-            arrivalId.toNumber()
+            arrivalId.toNumber(),
+            evt.blockNumber
           );
           if (!arrival) {
             console.error('arrival is null');
             return;
           }
           const fromPlanet: Planet = await this.getPlanet(
-            locationIdToBigNumber(arrival.fromPlanet)
+            locationIdToBigNumber(arrival.fromPlanet),
+            evt.blockNumber
           );
           const toPlanet: Planet = await this.getPlanet(
-            locationIdToBigNumber(arrival.toPlanet)
+            locationIdToBigNumber(arrival.toPlanet),
+            evt.blockNumber
           );
-          this.emit(ContractsAPIEvent.PlanetUpdate, toPlanet);
-          this.emit(ContractsAPIEvent.PlanetUpdate, fromPlanet);
+          const toArrivals = await this.getArrivalsForPlanet(toPlanet, evt.blockNumber);
+          this.emit(ContractsAPIEvent.PlanetUpdate, toPlanet, toArrivals);
+          const fromArrivals = await this.getArrivalsForPlanet(fromPlanet, evt.blockNumber);
+          this.emit(ContractsAPIEvent.PlanetUpdate, fromPlanet, fromArrivals);
           this.emit(ContractsAPIEvent.RadiusUpdated);
         }
       )
-      .on(ContractEvent.PlanetUpgraded, async (location, _: Event) => {
-        const planet = await this.getPlanet(location);
-        this.emit(ContractsAPIEvent.PlanetUpdate, planet);
+      .on(ContractEvent.PlanetUpgraded, async (location, evt: Event) => {
+        const planet = await this.getPlanet(location, evt.blockNumber);
+        const arrivals = await this.getArrivalsForPlanet(planet, evt.blockNumber);
+        this.emit(ContractsAPIEvent.PlanetUpdate, planet, arrivals);
       })
-      .on(ContractEvent.BoughtHat, async (location, _: Event) => {
-        const planet = await this.getPlanet(location);
-        this.emit(ContractsAPIEvent.PlanetUpdate, planet);
+      .on(ContractEvent.BoughtHat, async (location, evt: Event) => {
+        const planet = await this.getPlanet(location, evt.blockNumber);
+        const arrivals = await this.getArrivalsForPlanet(planet, evt.blockNumber);
+        this.emit(ContractsAPIEvent.PlanetUpdate, planet, arrivals);
       });
   }
 
@@ -506,17 +515,17 @@ export class Contract extends events.EventEmitter {
     return numBalance;
   }
 
-  async getArrival(arrivalId: number): Promise<QueuedArrival | null> {
+  async getArrival(arrivalId: number, blockTag: number): Promise<QueuedArrival | null> {
     const contract = this.coreContract;
-    const rawArrival: RawArrivalData = await contract.planetArrivals(arrivalId);
+    const rawArrival: RawArrivalData = await contract.callStatic.planetArrivals(arrivalId, { blockTag });
     return this.rawArrivalToObject(rawArrival);
   }
 
-  async getArrivalsForPlanet(planet: Planet): Promise<QueuedArrival[]> {
+  async getArrivalsForPlanet(planet: Planet, blockTag: number): Promise<QueuedArrival[]> {
     const contract = this.coreContract;
 
     const events = (
-      await contract.getPlanetArrivals(locationIdToDecStr(planet.locationId))
+      await contract.callStatic.getPlanetArrivals(locationIdToDecStr(planet.locationId), { blockTag })
     ).map(this.rawArrivalToObject);
 
     return events;
@@ -588,10 +597,11 @@ export class Contract extends events.EventEmitter {
     return planets;
   }
 
-  private async getPlanet(rawLoc: EthersBN): Promise<Planet> {
-    const rawPlanet = await this.coreContract.planets(rawLoc);
-    const rawPlanetExtendedInfo = await this.coreContract.planetsExtendedInfo(
-      rawLoc
+  private async getPlanet(rawLoc: EthersBN, blockTag: number): Promise<Planet> {
+    const rawPlanet = await this.coreContract.callStatic.planets(rawLoc, { blockTag });
+    const rawPlanetExtendedInfo = await this.coreContract.callStatic.planetsExtendedInfo(
+      rawLoc,
+      { blockTag }
     );
     return this.rawPlanetToObject(
       rawLoc.toString(),
