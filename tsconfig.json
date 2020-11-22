@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "module": "es6",
+    "module": "esnext",
     "target": "es2020",
     "outDir": "./dist/",
     "sourceMap": true,
