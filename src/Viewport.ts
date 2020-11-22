@@ -82,9 +82,6 @@ export class Viewport extends events.EventEmitter {
 
     this.isPanning = false;
 
-    // temporary, we do this because otherwise new players see a faded out home planet
-    this.zoomIn();
-    this.zoomIn();
     this.centerCoords(centerWorldCoords);
 
     let onMouseEvent = (emitEventName: UIEvent, mouseEvent: MouseEvent) => {
