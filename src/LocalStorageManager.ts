@@ -23,6 +23,8 @@ interface DBAction {
 
 export interface ChunkStore {
   hasMinedChunk: (chunkFootprint: ChunkFootprint) => boolean;
+  allChunks: () => Iterable<ExploredChunkData>;
+  loadIntoMemory: () => Promise<void>;
 }
 
 // (capital) alphanumeric character
@@ -211,6 +213,42 @@ export const addToChunkMap = (
   }
 };
 
+export class JsonStorageManager implements ChunkStore {
+  private mapPath: string;
+  private chunkMap: Map<string, ExploredChunkData>;
+
+  constructor(mapPath: string) {
+    this.mapPath = mapPath;
+    this.chunkMap = new Map<string, ExploredChunkData>();
+  }
+
+  async loadIntoMemory(): Promise<void> {
+    const resp = await fetch(this.mapPath);
+    const chunks: ExploredChunkData[] = await resp.json();
+    chunks.forEach(chunk => {
+      this.chunkMap.set(getChunkKey(chunk.chunkFootprint), chunk)
+    })
+  }
+
+  public hasMinedChunk(chunkLoc: ChunkFootprint): boolean {
+    let sideLength = chunkLoc.sideLength;
+    while (sideLength <= MAX_CHUNK_SIZE) {
+      const testChunkLoc = getChunkOfSideLength(
+        chunkLoc.bottomLeft,
+        sideLength
+      );
+      if (this.chunkMap.get(getChunkKey(testChunkLoc))) {
+        return true;
+      }
+      sideLength *= 2;
+    }
+    return !!this.chunkMap.get(getChunkKey(chunkLoc));
+  }
+
+  public allChunks(): Iterable<ExploredChunkData> {
+    return this.chunkMap.values();
+  }
+}
 
 
 export class LocalStorageManager implements ChunkStore {

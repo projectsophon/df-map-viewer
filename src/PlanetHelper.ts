@@ -15,7 +15,7 @@ import {
   contractPrecision,
 } from './Contract';
 import {
-  LocalStorageManager,
+  ChunkStore
 } from './LocalStorageManager';
 import bigInt from 'big-integer';
 import { Timer } from './Timer';
@@ -118,13 +118,13 @@ export class PlanetHelper {
   private readonly endTimeSeconds: number;
 
   // TODO: Should this be tied to PlanetHelper?
-  private chunkStore: LocalStorageManager;
+  private chunkStore: ChunkStore;
 
   private timer: Timer;
 
   constructor(
     planets: PlanetMap,
-    chunkStore: LocalStorageManager,
+    chunkStore: ChunkStore,
     unprocessedArrivals: VoyageContractData,
     unprocessedPlanetArrivalIds: PlanetVoyageIdMap,
     contractConstants: ContractConstants,
