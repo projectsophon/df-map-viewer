@@ -1,6 +1,6 @@
 import { CanvasRenderer } from './CanvasRenderer';
 import { Contract, ContractsAPIEvent } from './Contract';
-import { LocalStorageManager, toExploredChunk } from './LocalStorageManager';
+import { JsonStorageManager, LocalStorageManager, toExploredChunk } from './LocalStorageManager';
 import {
   PlanetHelper,
   VoyageContractData,
@@ -45,28 +45,7 @@ async function start() {
   const widthInWorldUnits = 250;
   const endTimeSeconds = 1609372800;
 
-  const db = multileveldown.client({ valueEncoding: 'json', retry: true });
-  const websocketStream = new WebSocket(
-    // @ts-ignore
-    import.meta.env.VITE_DB_CONNECTION_URL
-  );
-  const lre = LevelRangeEmitter.client(db);
-  lre.session(db.connect(), websocketStream);
-
-  const chunkStore = new LocalStorageManager(db);
-
-  lre.emitter.subscribe((key, type) => {
-    if (type === 'put') {
-      db.get(key, (err, value) => {
-        if (err) {
-          console.error(err);
-          return;
-        }
-
-        chunkStore.updateChunk(toExploredChunk(value), true);
-      });
-    }
-  });
+  const chunkStore = new JsonStorageManager('/map.json')
 
   const contractsAPI = await Contract.create();
 
