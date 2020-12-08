@@ -9,11 +9,6 @@ import {
 } from './PlanetHelper';
 import { Viewport } from './Viewport';
 import { Planet } from './GlobalTypes';
-// @ts-ignore
-import multileveldown from '/vendor/multileveldown-browser.js';
-// @ts-ignore
-import LevelRangeEmitter from '/vendor/level-range-emitter-browser.js';
-import WebSocket from 'simple-websocket/simplewebsocket.min';
 import { ReplayTimer } from './Timer';
 
 async function start() {
@@ -45,9 +40,15 @@ async function start() {
   const widthInWorldUnits = 250;
   const endTimeSeconds = 1609372800;
 
-  const chunkStore = new JsonStorageManager('/map.json')
-
   const contractsAPI = await Contract.create();
+  const contractConstants = await contractsAPI.getConstants();
+
+  const perlinThresholds = [
+    contractConstants.PERLIN_THRESHOLD_1,
+    contractConstants.PERLIN_THRESHOLD_2,
+  ];
+
+  const chunkStore = new JsonStorageManager('/map.json', perlinThresholds);
 
   const eventLogs = await contractsAPI.coreContract.queryFilter(
     {
@@ -60,24 +61,17 @@ async function start() {
 
   const [
     _mapLoaded,
-    contractConstants,
     worldRadius,
     allArrivals = [] as QueuedArrival[],
     planets = new Map(),
   ] = await Promise.all([
     chunkStore.loadIntoMemory(),
-    contractsAPI.getConstants(),
     contractsAPI.getWorldRadius(),
     // contractsAPI.getAllArrivals(),
     // contractsAPI.getPlanets(),
   ]);
 
   console.log('world radius', worldRadius);
-
-  const perlinThresholds = [
-    contractConstants.PERLIN_THRESHOLD_1,
-    contractConstants.PERLIN_THRESHOLD_2,
-  ];
 
   const arrivals: VoyageContractData = {};
   const planetVoyageIdMap: PlanetVoyageIdMap = {};
@@ -108,7 +102,7 @@ async function start() {
     timer,
   );
 
-  contractsAPI.on(ContractsAPIEvent.PlanetUpdate, async (planet: Planet, arrivals: QueuedArrival[]) => {
+  contractsAPI.on(ContractsAPIEvent.PlanetUpdate, (planet: Planet, arrivals: QueuedArrival[]) => {
     planetHelper.refreshPlanetAndArrivals(planet, arrivals);
     console.log(planetHelper.getLocationOfPlanet(planet.locationId));
   });
@@ -132,9 +126,9 @@ async function start() {
   );
 
   for (const evt of eventLogs) {
-    // console.log(await evt.getBlock());
-    console.log('waiting to process:', evt);
-    await timer.waitForBlockNumber(evt.blockNumber);
+    let block = await evt.getBlock()
+    console.log('waiting to process %o at %d', evt, block.timestamp);
+    await timer.waitForBlockNumber(block.timestamp);
     console.log('now processing:', evt);
     const args = evt.args || [];
     contractsAPI.coreContract.emit.apply(contractsAPI.coreContract, [evt.event, ...args, evt]);

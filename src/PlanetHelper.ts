@@ -68,7 +68,7 @@ export type QueuedArrival = {
 };
 export interface ArrivalWithTimer {
   arrivalData: QueuedArrival;
-  timer: ReturnType<typeof setTimeout>;
+  timer: number;
 }
 export interface VoyageMap {
   [arrivalId: string]: ArrivalWithTimer;
@@ -174,6 +174,7 @@ export class PlanetHelper {
     this.planetArrivalIds = planetArrivalIds;
 
     // set interval to update all planets every 120s
+    // TODO: add to Timer
     setInterval(() => {
       this.planets.forEach((planet) => {
         if (planet && hasOwner(planet)) {
@@ -185,6 +186,15 @@ export class PlanetHelper {
 
   public getExploredChunks(): Iterable<ExploredChunkData> {
     return this.chunkStore.allChunks();
+  }
+  public getExploredNebula(): Iterable<ExploredChunkData> {
+    return this.chunkStore.getNebulaChunks();
+  }
+  public getExploredSpace(): Iterable<ExploredChunkData> {
+    return this.chunkStore.getSpaceChunks();
+  }
+  public getExploredDeepSpace(): Iterable<ExploredChunkData> {
+    return this.chunkStore.getDeepSpaceChunks();
   }
 
   public getRadiusOfPlanetLevel(planetRarity: PlanetLevel): number {
@@ -263,9 +273,15 @@ export class PlanetHelper {
 
   // returns an empty planet if planet is not in contract
   // returns null if this isn't a planet, according to hash and coords
-  public getPlanetWithLocation(location: Location): Planet | null {
+  // returns null if the planet level is less than `onlyIfDetailLevel`
+  public getPlanetWithLocation(location: Location, onlyIfDetailLevel: number = 0): Planet | null {
     const planet = this.planets.get(location.hash);
     if (planet) {
+      // TODO: Account for owner detail level
+      if (planet.planetLevel < onlyIfDetailLevel) {
+        return null;
+      }
+
       this.updatePlanetIfStale(planet);
       return planet;
     }
@@ -373,20 +389,21 @@ export class PlanetHelper {
     const nowInSeconds = this.timer.now() / 1000;
     for (const arrival of arrivals) {
       try {
+        const arriveDiff = nowInSeconds - arrival.arrivalTime;
         const fromPlanet = this.planets.get(arrival.fromPlanet);
         const toPlanet = this.planets.get(arrival.toPlanet);
-        if (nowInSeconds - arrival.arrivalTime > 0 && fromPlanet && toPlanet) {
+        if (arriveDiff > 0 && fromPlanet && toPlanet) {
           // if arrival happened in the past, run this arrival
           this.arrive(fromPlanet, toPlanet, arrival);
         } else {
           // otherwise, set a timer to do this arrival in the future
           // and append it to arrivalsWithTimers
-          const applyFutureArrival = setTimeout(() => {
+          const applyFutureArrival = this.timer.setTimeout(() => {
             const fromPlanet = this.planets.get(arrival.fromPlanet);
             const toPlanet = this.planets.get(arrival.toPlanet);
             if (fromPlanet && toPlanet)
               this.arrive(fromPlanet, toPlanet, arrival);
-          }, arrival.arrivalTime * 1000 - this.timer.now());
+          }, Math.abs(arriveDiff) * 1000);
 
           const arrivalWithTimer = {
             arrivalData: arrival,
@@ -411,7 +428,7 @@ export class PlanetHelper {
       for (const arrivalId of this.planetArrivalIds[planetId]) {
         const arrivalWithTimer = this.arrivals[arrivalId];
         if (arrivalWithTimer) {
-          clearTimeout(arrivalWithTimer.timer);
+          this.timer.clearTimeout(arrivalWithTimer.timer);
         } else {
           console.error(`arrival with id ${arrivalId} wasn't found`);
         }
@@ -635,6 +652,10 @@ export class PlanetHelper {
   }
 
   private updatePlanetIfStale(planet: Planet): void {
+    // Only attempt to update planets pull from contract because default planets don't update
+    if (!planet.pulledFromContract) {
+      return;
+    }
     const now = this.timer.now();
     if (now / 1000 - planet.lastUpdated > 1) {
       this.updatePlanetToTime(planet, now);

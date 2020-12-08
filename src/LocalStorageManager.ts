@@ -22,9 +22,12 @@ interface DBAction {
 }
 
 export interface ChunkStore {
+  loadIntoMemory: () => Promise<void>;
   hasMinedChunk: (chunkFootprint: ChunkFootprint) => boolean;
   allChunks: () => Iterable<ExploredChunkData>;
-  loadIntoMemory: () => Promise<void>;
+  getNebulaChunks: () => Iterable<ExploredChunkData>;
+  getSpaceChunks: () => Iterable<ExploredChunkData>;
+  getDeepSpaceChunks: () => Iterable<ExploredChunkData>;
 }
 
 // (capital) alphanumeric character
@@ -172,7 +175,7 @@ export const addToChunkMap = (
     const siblingLocs = getSiblingLocations(chunkToAdd.chunkFootprint);
     let siblingsMined = true;
     for (const siblingLoc of siblingLocs) {
-      if (!map.get(getChunkKey(siblingLoc))) {
+      if (!map.has(getChunkKey(siblingLoc))) {
         siblingsMined = false;
         break;
       }
@@ -186,9 +189,9 @@ export const addToChunkMap = (
       const sibling = map.get(siblingKey);
       if (onRemove !== undefined) {
         onRemove(sibling);
-      } else {
-        map.delete(siblingKey);
       }
+      // Modify in-memory map
+      map.delete(siblingKey);
       if (sibling) {
         if (includePlanets) {
           planetLocations = planetLocations.concat(sibling.planetLocations);
@@ -208,18 +211,32 @@ export const addToChunkMap = (
   }
   if (onAdd !== undefined) {
     onAdd(chunkToAdd);
-  } else {
-    map.set(getChunkKey(chunkToAdd.chunkFootprint), chunkToAdd);
   }
+  // Modify in-memory map
+  map.set(getChunkKey(chunkToAdd.chunkFootprint), chunkToAdd);
 };
 
 export class JsonStorageManager implements ChunkStore {
   private mapPath: string;
   private chunkMap: Map<string, ExploredChunkData>;
 
-  constructor(mapPath: string) {
+  private nebulaChunks: Map<string, ExploredChunkData>;
+  private spaceChunks: Map<string, ExploredChunkData>;
+  private deepSpaceChunks: Map<string, ExploredChunkData>;
+
+  private perlinThreshold1: number;
+  private perlinThreshold2: number;
+
+  constructor(mapPath: string, perlinThresholds: number[]) {
     this.mapPath = mapPath;
     this.chunkMap = new Map<string, ExploredChunkData>();
+
+    this.perlinThreshold1 = perlinThresholds[0];
+    this.perlinThreshold2 = perlinThresholds[1];
+
+    this.nebulaChunks = new Map();
+    this.spaceChunks = new Map();
+    this.deepSpaceChunks = new Map();
   }
 
   async loadIntoMemory(): Promise<void> {
@@ -227,6 +244,18 @@ export class JsonStorageManager implements ChunkStore {
     const chunks: ExploredChunkData[] = await resp.json();
     chunks.forEach(chunk => {
       this.chunkMap.set(getChunkKey(chunk.chunkFootprint), chunk)
+
+      // let onAdd = (chunk) => {
+      //   TODO: emit an event since this is async
+      // }
+
+      if (chunk.perlin < this.perlinThreshold1) {
+        addToChunkMap(this.nebulaChunks, chunk, true,);
+      } else if (chunk.perlin < this.perlinThreshold2) {
+        addToChunkMap(this.spaceChunks, chunk, true);
+      } else {
+        addToChunkMap(this.deepSpaceChunks, chunk, true);
+      }
     })
   }
 
@@ -247,6 +276,18 @@ export class JsonStorageManager implements ChunkStore {
 
   public allChunks(): Iterable<ExploredChunkData> {
     return this.chunkMap.values();
+  }
+
+  public getNebulaChunks(): Iterable<ExploredChunkData> {
+    return this.nebulaChunks.values();
+  }
+
+  public getSpaceChunks(): Iterable<ExploredChunkData> {
+    return this.spaceChunks.values();
+  }
+
+  public getDeepSpaceChunks(): Iterable<ExploredChunkData> {
+    return this.deepSpaceChunks.values();
   }
 }
 
@@ -369,15 +410,6 @@ export class LocalStorageManager implements ChunkStore {
       MAX_CHUNK_SIZE
     );
 
-    // modify in-memory store
-    for (const action of tx) {
-      if (action.type === DBActionType.UPDATE && action.value) {
-        this.chunkMap.set(action.key, action.value);
-      } else if (action.type === DBActionType.DELETE) {
-        this.chunkMap.delete(action.key);
-      }
-    }
-
     // can stop here, if we're just loading into in-memory store from storage
     if (loadedFromStorage) {
       return;
@@ -441,6 +473,19 @@ export class LocalStorageManager implements ChunkStore {
   }
 
   public allChunks(): Iterable<ExploredChunkData> {
+    return this.chunkMap.values();
+  }
+
+  // TODO: fix these
+  public getNebulaChunks(): Iterable<ExploredChunkData> {
+    return this.chunkMap.values();
+  }
+
+  public getSpaceChunks(): Iterable<ExploredChunkData> {
+    return this.chunkMap.values();
+  }
+
+  public getDeepSpaceChunks(): Iterable<ExploredChunkData> {
     return this.chunkMap.values();
   }
 }
