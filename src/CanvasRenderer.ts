@@ -25,9 +25,6 @@ import {
   hatFromType,
 } from './Cosmetic';
 import {
-  addToChunkMap,
-} from './LocalStorageManager';
-import {
   dfstyles,
 } from './dfstyles';
 import { Timer } from './Timer';
@@ -55,10 +52,6 @@ export class CanvasRenderer {
   viewport: Viewport;
   timer: Timer;
 
-  zone0ChunkMap: Map<string, ExploredChunkData>;
-  zone1ChunkMap: Map<string, ExploredChunkData>;
-  zone2ChunkMap: Map<string, ExploredChunkData>;
-
   canvas: HTMLCanvasElement;
   ctx: CanvasRenderingContext2D;
   frameRequestId: number;
@@ -69,6 +62,8 @@ export class CanvasRenderer {
   frameCount: number;
   now: number;
   selected: Planet | null;
+
+  viewportDetailLevel: number;
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -93,9 +88,6 @@ export class CanvasRenderer {
 
     this.perlinThreshold1 = perlinThresholds[0];
     this.perlinThreshold2 = perlinThresholds[1];
-    this.zone0ChunkMap = new Map<string, ExploredChunkData>();
-    this.zone1ChunkMap = new Map<string, ExploredChunkData>();
-    this.zone2ChunkMap = new Map<string, ExploredChunkData>();
 
     this.frameCount = 0;
     this.now = this.timer.now();
@@ -105,38 +97,36 @@ export class CanvasRenderer {
   }
 
   private draw() {
-    const exploredChunks = this.planetHelper.getExploredChunks();
-    this.zone0ChunkMap = new Map<string, ExploredChunkData>();
-    this.zone1ChunkMap = new Map<string, ExploredChunkData>();
-    this.zone2ChunkMap = new Map<string, ExploredChunkData>();
-    const planetLocations: Set<Location> = new Set();
-    for (const exploredChunk of exploredChunks) {
-      if (this.viewport.intersectsViewport(exploredChunk)) {
-        let chunkMap: Map<string, ExploredChunkData>;
-        if (exploredChunk.perlin < this.perlinThreshold1) {
-          chunkMap = this.zone0ChunkMap;
-        } else if (exploredChunk.perlin < this.perlinThreshold2) {
-          chunkMap = this.zone1ChunkMap;
-        } else {
-          chunkMap = this.zone2ChunkMap;
-        }
-        addToChunkMap(chunkMap, exploredChunk, false);
-        for (const planetLocation of exploredChunk.planetLocations) {
-          planetLocations.add(planetLocation);
-        }
+    this.drawCleanBoard();
+
+    for (const exploredChunk of this.planetHelper.getExploredNebula()) {
+      if (!this.viewport.intersectsViewport(exploredChunk)) {
+        continue;
       }
+
+      this.drawKnownChunk(exploredChunk);
     }
 
-    this.drawCleanBoard();
-    this.drawKnownChunks([
-      this.zone0ChunkMap.values(),
-      this.zone1ChunkMap.values(),
-      this.zone2ChunkMap.values(),
-    ]);
+    for (const exploredChunk of this.planetHelper.getExploredSpace()) {
+      if (!this.viewport.intersectsViewport(exploredChunk)) {
+        continue;
+      }
+
+      this.drawKnownChunk(exploredChunk);
+    }
+
+    for (const exploredChunk of this.planetHelper.getExploredDeepSpace()) {
+      if (!this.viewport.intersectsViewport(exploredChunk)) {
+        continue;
+      }
+
+      this.drawKnownChunk(exploredChunk);
+    }
 
     this.drawSelectedRangeRing();
+    // TODO: make this only in viewport too
     this.drawVoyages();
-    this.drawPlanets(planetLocations);
+    this.drawPlanets();
 
     this.drawSelectedRect();
     this.drawHoveringRect();
@@ -147,6 +137,8 @@ export class CanvasRenderer {
   }
 
   private frame() {
+    // Cache this once per frame
+    this.viewportDetailLevel = this.viewport.getDetailLevel();
     this.frameCount++;
 
     // make the tick depend on detail level?
@@ -189,68 +181,101 @@ export class CanvasRenderer {
     this.ctx.fillRect(0, 0, this.viewport.viewportWidth, this.viewport.viewportHeight);
   }
 
-  private drawKnownChunks(
-    knownChunksInterables: Iterable<ExploredChunkData>[]
-  ) {
-    for (const knownChunks of knownChunksInterables) {
-      for (const chunk of knownChunks) {
-        const chunkLoc = chunk.chunkFootprint;
-        const center = {
-          x: chunkLoc.bottomLeft.x + chunkLoc.sideLength / 2,
-          y: chunkLoc.bottomLeft.y + chunkLoc.sideLength / 2,
-        };
-        const p = chunk.perlin;
+  private drawKnownChunk(chunk: ExploredChunkData) {
+    const chunkLoc = chunk.chunkFootprint;
+    const center = {
+      x: chunkLoc.bottomLeft.x + chunkLoc.sideLength / 2,
+      y: chunkLoc.bottomLeft.y + chunkLoc.sideLength / 2,
+    };
+    const p = chunk.perlin;
 
-        let fill: CanvasPattern | string = 'black';
+    let fill: CanvasPattern | string = 'black';
 
-        if (p < this.perlinThreshold1) {
-          fill = '#303080';
-        } else if (p < this.perlinThreshold2) {
-          fill = '#202060';
+    if (p < this.perlinThreshold1) {
+      fill = '#303080';
+    } else if (p < this.perlinThreshold2) {
+      fill = '#202060';
+    }
+
+    this.drawRectWithCenter(
+      center,
+      chunkLoc.sideLength,
+      chunkLoc.sideLength,
+      fill
+    );
+  }
+
+  private drawPlanets() {
+    for (const exploredChunk of this.planetHelper.getExploredNebula()) {
+      if (!this.viewport.intersectsViewport(exploredChunk)) {
+        continue;
+      }
+
+      for (let planetLocation of exploredChunk.planetLocations) {
+        let planet = this.planetHelper.getPlanetWithLocation(planetLocation, this.viewportDetailLevel)
+        if (!planet) {
+          continue;
         }
 
-        this.drawRectWithCenter(
-          center,
-          chunkLoc.sideLength,
-          chunkLoc.sideLength,
-          fill
-        );
+        for (let l = PlanetLevel.MAX; l >= PlanetLevel.MIN; l--) {
+          this.drawPlanetAtLocation(planetLocation, planet, l);
+        }
+      }
+    }
+
+    for (const exploredChunk of this.planetHelper.getExploredSpace()) {
+      if (!this.viewport.intersectsViewport(exploredChunk)) {
+        continue;
+      }
+
+      for (let planetLocation of exploredChunk.planetLocations) {
+        let planet = this.planetHelper.getPlanetWithLocation(planetLocation, this.viewportDetailLevel)
+        if (!planet) {
+          continue;
+        }
+
+        for (let l = PlanetLevel.MAX; l >= PlanetLevel.MIN; l--) {
+          this.drawPlanetAtLocation(planetLocation, planet, l);
+        }
+      }
+    }
+
+    for (const exploredChunk of this.planetHelper.getExploredDeepSpace()) {
+      if (!this.viewport.intersectsViewport(exploredChunk)) {
+        continue;
+      }
+
+      for (let planetLocation of exploredChunk.planetLocations) {
+        let planet = this.planetHelper.getPlanetWithLocation(planetLocation, this.viewportDetailLevel)
+        if (!planet) {
+          continue;
+        }
+
+        for (let l = PlanetLevel.MAX; l >= PlanetLevel.MIN; l--) {
+          this.drawPlanetAtLocation(planetLocation, planet, l);
+        }
       }
     }
   }
 
-  private drawPlanets(planetLocations: Set<Location>) {
-    for (let l = PlanetLevel.MAX; l >= PlanetLevel.MIN; l--) {
-      planetLocations.forEach((loc) => {
-        this.drawPlanetAtLocation(loc, l);
-      });
-    }
-  }
-
-  private drawPlanetAtLocation(location: Location, atLevel: PlanetLevel) {
-    const planet = this.planetHelper.getPlanetWithId(location.hash);
+  private drawPlanetAtLocation(location: Location, planet: Planet, atLevel: PlanetLevel) {
     const isSelected = location.hash === this.selected?.locationId;
 
-    if (!planet) return; // if we messed up somehow
-
     const planetLevel = planet.planetLevel;
-    const detailLevel = this.planetHelper.getPlanetDetailLevel(location.hash);
+    const detailLevel = planet.planetLevel;
 
     if (planetLevel !== atLevel) return; // strictly for ordering
 
-    const isVeryBig = planetLevel >= 6;
+    const isVeryBig = planet.planetLevel >= 6;
 
-    const radius = this.planetHelper.getRadiusOfPlanetLevel(planetLevel);
-    const radiusReal = this.viewport.worldToCanvasDist(radius);
-
-    // const minRadius = 1;
+    // always show selected and very big
     if (!isSelected || !isVeryBig) {
-      // always show selected and very big
-      // if (radiusReal < minRadius) return; // detail level fallback
-      if (detailLevel === null || detailLevel < this.viewport.getDetailLevel()) {
+      if (detailLevel === null || detailLevel < this.viewportDetailLevel) {
         return; // so we don't call getPlanetWithLocation, which triggers updates every second
       }
     }
+
+    const radius = this.planetHelper.getRadiusOfPlanetLevel(planetLevel);
 
     // if (isSelected || isVeryBig) {
     this.ctx.globalAlpha = 1;
