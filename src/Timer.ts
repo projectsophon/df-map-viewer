@@ -69,6 +69,10 @@ export class ReplayTimer implements Timer {
   clearTimeout(timeoutId: number): void {
     this._timeouts.delete(timeoutId)
   }
+
+  setSpeedMultiplier(multiplier: number): void {
+    this.speedMultiplier = multiplier;
+  }
 }
 
 export class LiveTimer implements Timer {

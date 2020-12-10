@@ -10,6 +10,11 @@ import {
 import { Viewport } from './Viewport';
 import { Planet } from './GlobalTypes';
 import { ReplayTimer } from './Timer';
+import { getAllTwitters } from './Twitter';
+
+import App from './components/app.svelte';
+import { users, speedMultiplier, selectedPlanet } from './components/stores.js';
+import { getPlayerColor } from './Cosmetic';
 
 async function start() {
   const canvas = document.querySelector('canvas');
@@ -62,11 +67,13 @@ async function start() {
   const [
     _mapLoaded,
     worldRadius,
+    twitters,
     allArrivals = [] as QueuedArrival[],
     planets = new Map(),
   ] = await Promise.all([
     chunkStore.loadIntoMemory(),
     contractsAPI.getWorldRadius(),
+    getAllTwitters(),
     // contractsAPI.getAllArrivals(),
     // contractsAPI.getPlanets(),
   ]);
@@ -107,6 +114,15 @@ async function start() {
     console.log(planetHelper.getLocationOfPlanet(planet.locationId));
   });
 
+  contractsAPI.on(ContractsAPIEvent.PlayerInit, (player, homePlanet) => {
+    console.log(player, homePlanet);
+    const { address } = player;
+    const twitter = twitters[address];
+    const color = getPlayerColor(address);
+    // @ts-ignore
+    users.update(users => users.concat({ address, twitter, homePlanet, color }))
+  });
+
   const viewport = new Viewport(
     planetHelper,
     homeCoords,
@@ -125,6 +141,9 @@ async function start() {
     timer,
   );
 
+  speedMultiplier.subscribe((multiplier) => timer.setSpeedMultiplier(multiplier));
+  selectedPlanet.subscribe((planet) => viewport.centerPlanet(planet));
+
   for (const evt of eventLogs) {
     let block = await evt.getBlock()
     console.log('waiting to process %o at %d', evt, block.timestamp);
@@ -136,3 +155,7 @@ async function start() {
 }
 
 start().then(console.log).catch(console.log);
+
+const svelteApp = new App({
+  target: document.getElementById("ui"),
+});
