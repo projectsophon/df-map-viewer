@@ -55,6 +55,7 @@ export interface ContractConstants {
   upgrades: UpgradesInfo;
 }
 
+// TODO: Make sure the ContractEvent and ContractsAPIEvent don't collide
 export enum ContractEvent {
   PlayerInitialized = 'PlayerInitialized',
   ArrivalQueued = 'ArrivalQueued',
@@ -334,12 +335,16 @@ export class Contract extends events.EventEmitter {
     this.coreContract = coreContract;
   }
 
-  static async create(): Promise<Contract> {
+  static async create(isReplay = false): Promise<Contract> {
     const ethConnection = new EthereumAccountManager()
     const coreContract: CoreContract = await ethConnection.loadCoreContract();
 
     const contract: Contract = new Contract(coreContract);
     contract.setupEventListeners();
+
+    if (!isReplay) {
+      contract.attachCoreContractListeners()
+    }
 
     ethConnection.on('ChangedRPCEndpoint', async () => {
       contract.coreContract = await ethConnection.loadCoreContract();
@@ -350,18 +355,36 @@ export class Contract extends events.EventEmitter {
 
   destroy(): void {
     this.removeEventListeners();
+    // TODO: Remove coreContractListeners
+  }
+
+  private attachCoreContractListeners(): void {
+    // TODO: re-emitter instead
+    this.coreContract
+      .on(ContractEvent.PlayerInitialized, (player, locRaw, evt: Event) => {
+        this.emit(ContractEvent.PlayerInitialized, player, locRaw, evt)
+      })
+      .on(ContractEvent.ArrivalQueued, (arrivalId: EthersBN, evt: Event) => {
+        this.emit(ContractEvent.ArrivalQueued, arrivalId, evt)
+      })
+      .on(ContractEvent.PlanetUpgraded, (location, evt: Event) => {
+        this.emit(ContractEvent.PlanetUpgraded, location, evt)
+      })
+      .on(ContractEvent.BoughtHat, (location, evt: Event) => {
+        this.emit(ContractEvent.BoughtHat, location, evt)
+      })
   }
 
   private setupEventListeners(): void {
-    // TODO replace these with block polling
-    this.coreContract
+    // These are attaching event handlers to ourselves
+    // for events re-emitted by the `coreContract` or replayer
+    this
       .on(ContractEvent.PlayerInitialized, async (player, locRaw, evt: Event) => {
         const newPlayer: Player = { address: address(player) };
-        this.emit(ContractsAPIEvent.PlayerInit, newPlayer);
-        // debugger;
 
         const newPlanet: Planet = await this.getPlanet(locRaw, evt.blockNumber);
         const arrivals = await this.getArrivalsForPlanet(newPlanet, evt.blockNumber);
+        this.emit(ContractsAPIEvent.PlayerInit, newPlayer, newPlanet);
         this.emit(ContractsAPIEvent.PlanetUpdate, newPlanet, arrivals);
         this.emit(ContractsAPIEvent.RadiusUpdated);
       })
@@ -404,9 +427,11 @@ export class Contract extends events.EventEmitter {
   }
 
   removeEventListeners(): void {
-    this.coreContract.removeAllListeners(ContractEvent.PlayerInitialized);
-    this.coreContract.removeAllListeners(ContractEvent.ArrivalQueued);
-    this.coreContract.removeAllListeners(ContractEvent.PlanetUpgraded);
+    // Remove the re-emitted contract events
+    this.removeAllListeners(ContractEvent.PlayerInitialized);
+    this.removeAllListeners(ContractEvent.ArrivalQueued);
+    this.removeAllListeners(ContractEvent.PlanetUpgraded);
+    this.removeAllListeners(ContractEvent.BoughtHat);
   }
 
   public getContractAddress(): EthAddress {

@@ -45,7 +45,9 @@ async function start() {
   const widthInWorldUnits = 250;
   const endTimeSeconds = 1609372800;
 
-  const contractsAPI = await Contract.create();
+  const isReplay = true;
+
+  const contractsAPI = await Contract.create(isReplay);
   const contractConstants = await contractsAPI.getConstants();
 
   const perlinThresholds = [
@@ -150,7 +152,7 @@ async function start() {
     await timer.waitForBlockNumber(block.timestamp);
     console.log('now processing:', evt);
     const args = evt.args || [];
-    contractsAPI.coreContract.emit.apply(contractsAPI.coreContract, [evt.event, ...args, evt]);
+    contractsAPI.emit.apply(contractsAPI, [evt.event, ...args, evt]);
   }
 }
 

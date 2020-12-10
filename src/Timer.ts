@@ -3,6 +3,8 @@ export interface Timer {
 
   setTimeout(fn: () => void, ms: number): number;
   clearTimeout(handle: number): void;
+
+  // TODO: Add setInterval & clearInterval
 }
 
 export class ReplayTimer implements Timer {
@@ -19,7 +21,7 @@ export class ReplayTimer implements Timer {
 
   constructor() {
     // TODO: parameterize
-    this.speedMultiplier = 7;
+    this.speedMultiplier = 15;
     this.startTime = 1601678470 * 1000;
     this._now = this.startTime;
     this._timeouts = new Map();
