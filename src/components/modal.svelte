@@ -7,11 +7,11 @@
     position: absolute;
 
     padding: 10px;
-    color: #ffffff;
-    background: #080808;
+    color: var(--df-color);
+    background: var(--df-background);
 
     border-radius: 3px;
-    border: 1px solid #fff;
+    border: 1px solid var(--df-background);
   }
 </style>
 

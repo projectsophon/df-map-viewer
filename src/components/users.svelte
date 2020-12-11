@@ -1,6 +1,6 @@
 <script>
   import Modal from "./modal.svelte";
-  import { selectedPlanet, speedMultiplier, users } from "./stores.js";
+  import { selectedPlanet, users } from "./stores.js";
 
   const getPlayerShortHash = (address) => {
     return address.substring(0, 6);
@@ -14,7 +14,7 @@
 <style>
   .users-container {
     overflow: auto;
-    min-width: 200px;
+    min-width: 250px;
     max-height: 250px;
   }
 
@@ -32,16 +32,18 @@
 <Modal>
   <div class="users-container">
     <div>Users:</div>
-    <ul class="user-list">
-      {#each $users as user}
-        <li
-          class="user"
-          style="color: {user.color}"
-          on:click={() => selectHome(user.homePlanet)}>
-          {getPlayerShortHash(user.address)}
-          {#if user.twitter}- {user.twitter}{/if}
-        </li>
-      {/each}
-    </ul>
+    {#if $users.length !== 0}
+      <ul class="user-list">
+        {#each $users as user}
+          <li
+            class="user"
+            style="color: {user.color}"
+            on:click={() => selectHome(user.homePlanet)}>
+            {getPlayerShortHash(user.address)}
+            {#if user.twitter}- {user.twitter}{/if}
+          </li>
+        {/each}
+      </ul>
+    {/if}
   </div>
 </Modal>

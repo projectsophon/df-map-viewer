@@ -2,12 +2,12 @@
   import Modal from "./modal.svelte";
   import { speedMultiplier } from "./stores.js";
 
-  const doubleSpeed = () => {
-    speedMultiplier.update((speed) => Math.min(Math.floor(speed * 2), 50));
+  const increaseSpeed = () => {
+    speedMultiplier.update((speed) => Math.min(speed + 2, 100));
   };
 
-  const halveSpeed = () => {
-    speedMultiplier.update((speed) => Math.max(Math.floor(speed / 2), 1));
+  const decreaseSpeed = () => {
+    speedMultiplier.update((speed) => Math.max(speed - 2, 1));
   };
 
   let position = { left: "5px", bottom: "5px" };
@@ -15,7 +15,7 @@
 
 <style>
   .title {
-    margin-right: 10px;
+    margin-right: 0.25em;
   }
 
   .speed {
@@ -23,17 +23,17 @@
   }
 
   button {
-    background: #080808;
-    color: #fff;
-    border: 1px solid #fff;
+    background: var(--df-background);
+    color: var(--df-color);
+    border: 1px solid var(--df-color);
   }
 </style>
 
 <Modal {position}>
-  <span class="title">Replay speed:</span>
+  <span class="title">Speed:</span>
   <span>
-    <button on:click={halveSpeed}>&LeftArrow;</button>
+    <button on:click={decreaseSpeed}>&LeftArrow;</button>
     <span class="speed">{$speedMultiplier}x</span>
-    <button on:click={doubleSpeed}>&RightArrow;</button>
+    <button on:click={increaseSpeed}>&RightArrow;</button>
   </span>
 </Modal>
