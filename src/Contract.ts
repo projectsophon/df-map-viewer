@@ -440,19 +440,19 @@ export class Contract extends events.EventEmitter {
     return address(this.coreContract.address);
   }
 
-  async getConstants(): Promise<ContractConstants> {
+  async getConstants(blockTag: number): Promise<ContractConstants> {
     console.log('getting constants');
 
     const contract = this.coreContract;
     const res = await Promise.all([
-      contract.TIME_FACTOR_HUNDREDTHS(),
-      contract.PERLIN_THRESHOLD_1(),
-      contract.PERLIN_THRESHOLD_2(),
-      contract.PLANET_RARITY(),
-      contract.SILVER_RARITY_1(),
-      contract.SILVER_RARITY_2(),
-      contract.SILVER_RARITY_3(),
-      contract.getUpgrades(),
+      contract.callStatic.TIME_FACTOR_HUNDREDTHS({ blockTag }),
+      contract.callStatic.PERLIN_THRESHOLD_1({ blockTag }),
+      contract.callStatic.PERLIN_THRESHOLD_2({ blockTag }),
+      contract.callStatic.PLANET_RARITY({ blockTag }),
+      contract.callStatic.SILVER_RARITY_1({ blockTag }),
+      contract.callStatic.SILVER_RARITY_2({ blockTag }),
+      contract.callStatic.SILVER_RARITY_3({ blockTag }),
+      contract.callStatic.getUpgrades({ blockTag }),
     ]);
     const TIME_FACTOR_HUNDREDTHS = res[0].toNumber();
     const PERLIN_THRESHOLD_1 = res[1].toNumber();
@@ -467,7 +467,7 @@ export class Contract extends events.EventEmitter {
       rawUpgrades
     );
 
-    const rawDefaults: RawDefaults = await contract.getDefaultStats();
+    const rawDefaults: RawDefaults = await contract.callStatic.getDefaultStats({ blockTag });
 
     return {
       TIME_FACTOR_HUNDREDTHS,
@@ -497,10 +497,10 @@ export class Contract extends events.EventEmitter {
       defaultBarbarianPercentage: rawDefaults.map((x) => x[8].toNumber()),
 
       planetLevelThresholds: (
-        await contract.getPlanetLevelThresholds()
+        await contract.callStatic.getPlanetLevelThresholds({ blockTag })
       ).map((x: EthersBN) => x.toNumber()),
       planetCumulativeRarities: (
-        await contract.getPlanetCumulativeRarities()
+        await contract.callStatic.getPlanetCumulativeRarities({ blockTag })
       ).map((x: EthersBN) => x.toNumber()),
 
       upgrades,
