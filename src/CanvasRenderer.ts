@@ -99,6 +99,9 @@ export class CanvasRenderer {
   private draw() {
     this.drawCleanBoard();
 
+    this.ctx.save();
+    this.clipByWorldRadius();
+
     for (const exploredChunk of this.planetHelper.getExploredNebula()) {
       if (!this.viewport.intersectsViewport(exploredChunk)) {
         continue;
@@ -134,6 +137,8 @@ export class CanvasRenderer {
     this.drawBorders();
 
     this.drawMiner();
+
+    this.ctx.restore();
   }
 
   private frame() {
@@ -473,6 +478,9 @@ export class CanvasRenderer {
       });
     } else if (fromLoc && fromPlanet && toLoc) {
       // know source and destination locations
+      const toPlanet = this.planetHelper.getPlanetWithId(voyage.toPlanet);
+      const isAttack = toPlanet && hasOwner(toPlanet) && fromPlanet.owner != toPlanet?.owner;
+
       const now = this.now / 1000;
       let proportion =
         (now - voyage.departureTime) /
@@ -486,7 +494,11 @@ export class CanvasRenderer {
         (1 - proportion) * fromLoc.coords.y + proportion * toLoc.coords.y;
       const shipsLocation = { x: shipsLocationX, y: shipsLocationY };
 
-      this.drawCircleWithCenter(shipsLocation, 1, 'red');
+      this.drawCircleWithCenter(
+        shipsLocation,
+        1,
+        isAttack ? 'red' : getOwnerColor(fromPlanet, 1)
+      );
       const timeLeftSeconds = Math.floor(voyage.arrivalTime - now);
       this.drawText(
         `${timeLeftSeconds.toString()}s`,
@@ -509,12 +521,14 @@ export class CanvasRenderer {
     if (!fromPlanet || !fromLoc || !toLoc) {
       return;
     }
+    const toPlanet = this.planetHelper.getPlanetWithId(to);
+    const isAttack = toPlanet && hasOwner(toPlanet) && fromPlanet.owner != toPlanet?.owner;
 
     this.drawLine(
       fromLoc.coords,
       toLoc.coords,
       confirmed ? 2 : 1,
-      isMyVoyage ? 'blue' : 'red',
+      isMyVoyage ? 'blue' : isAttack ? 'red' : getOwnerColor(fromPlanet, 1),
       confirmed ? false : true
     );
   }
@@ -615,6 +629,23 @@ export class CanvasRenderer {
 
   private drawBorders() {
     this.drawLoopWithCenter({ x: 0, y: 0 }, this.worldRadius, 2, 'white');
+  }
+
+  private clipByWorldRadius() {
+    const { viewport } = this;
+
+    const centerCanvasCoords = viewport.worldToCanvasCoords({ x: 0, y: 0 });
+    const radiusCanvasCoords = viewport.worldToCanvasDist(this.worldRadius);
+    this.ctx.beginPath();
+    this.ctx.arc(
+      centerCanvasCoords.x,
+      centerCanvasCoords.y,
+      radiusCanvasCoords,
+      1.5 * Math.PI,
+      1.5 * Math.PI + (2 * Math.PI * 100) / 100,
+      false
+    );
+    this.ctx.clip();
   }
 
   private drawHat(

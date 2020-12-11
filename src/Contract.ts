@@ -55,6 +55,7 @@ export interface ContractConstants {
   upgrades: UpgradesInfo;
 }
 
+// TODO: Make sure the ContractEvent and ContractsAPIEvent don't collide
 export enum ContractEvent {
   PlayerInitialized = 'PlayerInitialized',
   ArrivalQueued = 'ArrivalQueued',
@@ -334,12 +335,16 @@ export class Contract extends events.EventEmitter {
     this.coreContract = coreContract;
   }
 
-  static async create(): Promise<Contract> {
+  static async create(isReplay = false): Promise<Contract> {
     const ethConnection = new EthereumAccountManager()
     const coreContract: CoreContract = await ethConnection.loadCoreContract();
 
     const contract: Contract = new Contract(coreContract);
     contract.setupEventListeners();
+
+    if (!isReplay) {
+      contract.attachCoreContractListeners()
+    }
 
     ethConnection.on('ChangedRPCEndpoint', async () => {
       contract.coreContract = await ethConnection.loadCoreContract();
@@ -350,20 +355,39 @@ export class Contract extends events.EventEmitter {
 
   destroy(): void {
     this.removeEventListeners();
+    // TODO: Remove coreContractListeners
+  }
+
+  private attachCoreContractListeners(): void {
+    // TODO: re-emitter instead
+    this.coreContract
+      .on(ContractEvent.PlayerInitialized, (player, locRaw, evt: Event) => {
+        this.emit(ContractEvent.PlayerInitialized, player, locRaw, evt)
+      })
+      .on(ContractEvent.ArrivalQueued, (arrivalId: EthersBN, evt: Event) => {
+        this.emit(ContractEvent.ArrivalQueued, arrivalId, evt)
+      })
+      .on(ContractEvent.PlanetUpgraded, (location, evt: Event) => {
+        this.emit(ContractEvent.PlanetUpgraded, location, evt)
+      })
+      .on(ContractEvent.BoughtHat, (location, evt: Event) => {
+        this.emit(ContractEvent.BoughtHat, location, evt)
+      })
   }
 
   private setupEventListeners(): void {
-    // TODO replace these with block polling
-    this.coreContract
+    // These are attaching event handlers to ourselves
+    // for events re-emitted by the `coreContract` or replayer
+    this
       .on(ContractEvent.PlayerInitialized, async (player, locRaw, evt: Event) => {
         const newPlayer: Player = { address: address(player) };
-        this.emit(ContractsAPIEvent.PlayerInit, newPlayer);
-        // debugger;
 
         const newPlanet: Planet = await this.getPlanet(locRaw, evt.blockNumber);
         const arrivals = await this.getArrivalsForPlanet(newPlanet, evt.blockNumber);
+        this.emit(ContractsAPIEvent.PlayerInit, newPlayer, newPlanet);
         this.emit(ContractsAPIEvent.PlanetUpdate, newPlanet, arrivals);
-        this.emit(ContractsAPIEvent.RadiusUpdated);
+        let newRadius = await this.getWorldRadius(evt.blockNumber);
+        this.emit(ContractsAPIEvent.RadiusUpdated, newRadius);
       })
       .on(
         ContractEvent.ArrivalQueued,
@@ -388,7 +412,8 @@ export class Contract extends events.EventEmitter {
           this.emit(ContractsAPIEvent.PlanetUpdate, toPlanet, toArrivals);
           const fromArrivals = await this.getArrivalsForPlanet(fromPlanet, evt.blockNumber);
           this.emit(ContractsAPIEvent.PlanetUpdate, fromPlanet, fromArrivals);
-          this.emit(ContractsAPIEvent.RadiusUpdated);
+          let newRadius = await this.getWorldRadius(evt.blockNumber);
+          this.emit(ContractsAPIEvent.RadiusUpdated, newRadius);
         }
       )
       .on(ContractEvent.PlanetUpgraded, async (location, evt: Event) => {
@@ -404,28 +429,30 @@ export class Contract extends events.EventEmitter {
   }
 
   removeEventListeners(): void {
-    this.coreContract.removeAllListeners(ContractEvent.PlayerInitialized);
-    this.coreContract.removeAllListeners(ContractEvent.ArrivalQueued);
-    this.coreContract.removeAllListeners(ContractEvent.PlanetUpgraded);
+    // Remove the re-emitted contract events
+    this.removeAllListeners(ContractEvent.PlayerInitialized);
+    this.removeAllListeners(ContractEvent.ArrivalQueued);
+    this.removeAllListeners(ContractEvent.PlanetUpgraded);
+    this.removeAllListeners(ContractEvent.BoughtHat);
   }
 
   public getContractAddress(): EthAddress {
     return address(this.coreContract.address);
   }
 
-  async getConstants(): Promise<ContractConstants> {
+  async getConstants(blockTag: number): Promise<ContractConstants> {
     console.log('getting constants');
 
     const contract = this.coreContract;
     const res = await Promise.all([
-      contract.TIME_FACTOR_HUNDREDTHS(),
-      contract.PERLIN_THRESHOLD_1(),
-      contract.PERLIN_THRESHOLD_2(),
-      contract.PLANET_RARITY(),
-      contract.SILVER_RARITY_1(),
-      contract.SILVER_RARITY_2(),
-      contract.SILVER_RARITY_3(),
-      contract.getUpgrades(),
+      contract.callStatic.TIME_FACTOR_HUNDREDTHS({ blockTag }),
+      contract.callStatic.PERLIN_THRESHOLD_1({ blockTag }),
+      contract.callStatic.PERLIN_THRESHOLD_2({ blockTag }),
+      contract.callStatic.PLANET_RARITY({ blockTag }),
+      contract.callStatic.SILVER_RARITY_1({ blockTag }),
+      contract.callStatic.SILVER_RARITY_2({ blockTag }),
+      contract.callStatic.SILVER_RARITY_3({ blockTag }),
+      contract.callStatic.getUpgrades({ blockTag }),
     ]);
     const TIME_FACTOR_HUNDREDTHS = res[0].toNumber();
     const PERLIN_THRESHOLD_1 = res[1].toNumber();
@@ -440,7 +467,7 @@ export class Contract extends events.EventEmitter {
       rawUpgrades
     );
 
-    const rawDefaults: RawDefaults = await contract.getDefaultStats();
+    const rawDefaults: RawDefaults = await contract.callStatic.getDefaultStats({ blockTag });
 
     return {
       TIME_FACTOR_HUNDREDTHS,
@@ -470,10 +497,10 @@ export class Contract extends events.EventEmitter {
       defaultBarbarianPercentage: rawDefaults.map((x) => x[8].toNumber()),
 
       planetLevelThresholds: (
-        await contract.getPlanetLevelThresholds()
+        await contract.callStatic.getPlanetLevelThresholds({ blockTag })
       ).map((x: EthersBN) => x.toNumber()),
       planetCumulativeRarities: (
-        await contract.getPlanetCumulativeRarities()
+        await contract.callStatic.getPlanetCumulativeRarities({ blockTag })
       ).map((x: EthersBN) => x.toNumber()),
 
       upgrades,
@@ -503,8 +530,8 @@ export class Contract extends events.EventEmitter {
     return playerMap;
   }
 
-  async getWorldRadius(): Promise<number> {
-    const radius = (await this.coreContract.worldRadius()).toNumber();
+  async getWorldRadius(blockTag: number): Promise<number> {
+    const radius = (await this.coreContract.worldRadius({ blockTag })).toNumber();
     return radius;
   }
 
@@ -721,5 +748,15 @@ export class Contract extends events.EventEmitter {
     return rawUpgradesInfo.map((a) =>
       a.map((b) => this.rawUpgradeToUpgrade(b))
     ) as UpgradesInfo;
+  }
+
+  public async getLogs(beginBlockNumber: number, endBlockNumber: number): Promise<Event[]> {
+    return this.coreContract.queryFilter(
+      {
+        address: this.coreContract.address,
+      },
+      beginBlockNumber,
+      endBlockNumber,
+    );
   }
 }

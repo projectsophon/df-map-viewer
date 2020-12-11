@@ -3,6 +3,9 @@ export interface Timer {
 
   setTimeout(fn: () => void, ms: number): number;
   clearTimeout(handle: number): void;
+
+  setInterval(fn: () => void, ms: number): number;
+  clearInterval(handle: number): void;
 }
 
 export class ReplayTimer implements Timer {
@@ -13,17 +16,18 @@ export class ReplayTimer implements Timer {
 
   rafStartTime: number;
 
+  _timerId: number;
   _timeouts: Map<number, [number, () => void]>;
-
-  _timeoutId: number;
+  _intervals: Map<number, [number, () => void]>;
 
   constructor() {
-    // TODO: parameterize
-    this.speedMultiplier = 7;
-    this.startTime = 1601678470 * 1000;
+    // TODO: Parameterize?
+    this.speedMultiplier = 10;
+    this.startTime = 1601677525 * 1000;
     this._now = this.startTime;
+    this._timerId = 0;
     this._timeouts = new Map();
-    this._timeoutId = 0;
+    this._intervals = new Map();
   }
 
   tick(timeOfBlock: number, resolve: (value?: unknown) => void) {
@@ -41,9 +45,19 @@ export class ReplayTimer implements Timer {
           this._timeouts.delete(id);
         }
       }
+      for (let [id, [interval, intervalFn]] of this._intervals.entries()) {
+        // If the interval is now or in the past, run it and update the interval
+        if (interval <= this._now) {
+          intervalFn()
+          this._intervals.set(id, [interval, intervalFn]);
+        }
+      }
 
       if (this._now >= timeOfBlock) {
-        resolve()
+        // Does this make sense to re-center the timestamp
+        // since the block lookups might have been slow?
+        this._now = timeOfBlock;
+        resolve();
       } else {
         this.tick(timeOfBlock, resolve);
       }
@@ -61,13 +75,27 @@ export class ReplayTimer implements Timer {
   }
 
   setTimeout(fn: () => void, ms: number): number {
-    this._timeoutId++;
-    this._timeouts.set(this._timeoutId, [this.now() + ms, fn]);
-    return this._timeoutId;
+    this._timerId++;
+    this._timeouts.set(this._timerId, [this.now() + ms, fn]);
+    return this._timerId;
   }
 
-  clearTimeout(timeoutId: number): void {
-    this._timeouts.delete(timeoutId)
+  clearTimeout(timerId: number): void {
+    this._timeouts.delete(timerId)
+  }
+
+  setInterval(fn: () => void, ms: number): number {
+    this._timerId++;
+    this._intervals.set(this._timerId, [this.now() + ms, fn]);
+    return this._timerId;
+  }
+
+  clearInterval(timerId: number): void {
+    this._intervals.delete(timerId);
+  }
+
+  setSpeedMultiplier(multiplier: number): void {
+    this.speedMultiplier = multiplier;
   }
 }
 
@@ -83,4 +111,6 @@ export class LiveTimer implements Timer {
   // TODO: Can I do this?
   setTimeout = setTimeout
   clearTimeout = clearTimeout
+  setInterval = setInterval
+  clearInterval = clearInterval
 }
