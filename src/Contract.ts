@@ -386,7 +386,8 @@ export class Contract extends events.EventEmitter {
         const arrivals = await this.getArrivalsForPlanet(newPlanet, evt.blockNumber);
         this.emit(ContractsAPIEvent.PlayerInit, newPlayer, newPlanet);
         this.emit(ContractsAPIEvent.PlanetUpdate, newPlanet, arrivals);
-        this.emit(ContractsAPIEvent.RadiusUpdated);
+        let newRadius = await this.getWorldRadius(evt.blockNumber);
+        this.emit(ContractsAPIEvent.RadiusUpdated, newRadius);
       })
       .on(
         ContractEvent.ArrivalQueued,
@@ -411,7 +412,8 @@ export class Contract extends events.EventEmitter {
           this.emit(ContractsAPIEvent.PlanetUpdate, toPlanet, toArrivals);
           const fromArrivals = await this.getArrivalsForPlanet(fromPlanet, evt.blockNumber);
           this.emit(ContractsAPIEvent.PlanetUpdate, fromPlanet, fromArrivals);
-          this.emit(ContractsAPIEvent.RadiusUpdated);
+          let newRadius = await this.getWorldRadius(evt.blockNumber);
+          this.emit(ContractsAPIEvent.RadiusUpdated, newRadius);
         }
       )
       .on(ContractEvent.PlanetUpgraded, async (location, evt: Event) => {
@@ -528,8 +530,8 @@ export class Contract extends events.EventEmitter {
     return playerMap;
   }
 
-  async getWorldRadius(): Promise<number> {
-    const radius = (await this.coreContract.worldRadius()).toNumber();
+  async getWorldRadius(blockTag: number): Promise<number> {
+    const radius = (await this.coreContract.worldRadius({ blockTag })).toNumber();
     return radius;
   }
 
