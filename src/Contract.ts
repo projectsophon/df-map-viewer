@@ -749,4 +749,14 @@ export class Contract extends events.EventEmitter {
       a.map((b) => this.rawUpgradeToUpgrade(b))
     ) as UpgradesInfo;
   }
+
+  public async getLogs(beginBlockNumber: number, endBlockNumber: number): Promise<Event[]> {
+    return this.coreContract.queryFilter(
+      {
+        address: this.coreContract.address,
+      },
+      beginBlockNumber,
+      endBlockNumber,
+    );
+  }
 }
