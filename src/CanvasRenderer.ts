@@ -478,6 +478,9 @@ export class CanvasRenderer {
       });
     } else if (fromLoc && fromPlanet && toLoc) {
       // know source and destination locations
+      const toPlanet = this.planetHelper.getPlanetWithId(voyage.toPlanet);
+      const isAttack = toPlanet && hasOwner(toPlanet) && fromPlanet.owner != toPlanet?.owner;
+
       const now = this.now / 1000;
       let proportion =
         (now - voyage.departureTime) /
@@ -491,7 +494,11 @@ export class CanvasRenderer {
         (1 - proportion) * fromLoc.coords.y + proportion * toLoc.coords.y;
       const shipsLocation = { x: shipsLocationX, y: shipsLocationY };
 
-      this.drawCircleWithCenter(shipsLocation, 1, 'red');
+      this.drawCircleWithCenter(
+        shipsLocation,
+        1,
+        isAttack ? 'red' : getOwnerColor(fromPlanet, 1)
+      );
       const timeLeftSeconds = Math.floor(voyage.arrivalTime - now);
       this.drawText(
         `${timeLeftSeconds.toString()}s`,
@@ -514,12 +521,14 @@ export class CanvasRenderer {
     if (!fromPlanet || !fromLoc || !toLoc) {
       return;
     }
+    const toPlanet = this.planetHelper.getPlanetWithId(to);
+    const isAttack = toPlanet && hasOwner(toPlanet) && fromPlanet.owner != toPlanet?.owner;
 
     this.drawLine(
       fromLoc.coords,
       toLoc.coords,
       confirmed ? 2 : 1,
-      isMyVoyage ? 'blue' : 'red',
+      isMyVoyage ? 'blue' : isAttack ? 'red' : getOwnerColor(fromPlanet, 1),
       confirmed ? false : true
     );
   }
