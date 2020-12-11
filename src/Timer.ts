@@ -54,7 +54,10 @@ export class ReplayTimer implements Timer {
       }
 
       if (this._now >= timeOfBlock) {
-        resolve()
+        // Does this make sense to re-center the timestamp
+        // since the block lookups might have been slow?
+        this._now = timeOfBlock;
+        resolve();
       } else {
         this.tick(timeOfBlock, resolve);
       }
