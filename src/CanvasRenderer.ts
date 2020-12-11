@@ -99,6 +99,9 @@ export class CanvasRenderer {
   private draw() {
     this.drawCleanBoard();
 
+    this.ctx.save();
+    this.clipByWorldRadius();
+
     for (const exploredChunk of this.planetHelper.getExploredNebula()) {
       if (!this.viewport.intersectsViewport(exploredChunk)) {
         continue;
@@ -134,6 +137,8 @@ export class CanvasRenderer {
     this.drawBorders();
 
     this.drawMiner();
+
+    this.ctx.restore();
   }
 
   private frame() {
@@ -615,6 +620,23 @@ export class CanvasRenderer {
 
   private drawBorders() {
     this.drawLoopWithCenter({ x: 0, y: 0 }, this.worldRadius, 2, 'white');
+  }
+
+  private clipByWorldRadius() {
+    const { viewport } = this;
+
+    const centerCanvasCoords = viewport.worldToCanvasCoords({ x: 0, y: 0 });
+    const radiusCanvasCoords = viewport.worldToCanvasDist(this.worldRadius);
+    this.ctx.beginPath();
+    this.ctx.arc(
+      centerCanvasCoords.x,
+      centerCanvasCoords.y,
+      radiusCanvasCoords,
+      1.5 * Math.PI,
+      1.5 * Math.PI + (2 * Math.PI * 100) / 100,
+      false
+    );
+    this.ctx.clip();
   }
 
   private drawHat(
