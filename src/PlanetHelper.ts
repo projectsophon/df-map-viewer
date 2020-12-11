@@ -174,8 +174,7 @@ export class PlanetHelper {
     this.planetArrivalIds = planetArrivalIds;
 
     // set interval to update all planets every 120s
-    // TODO: add to Timer
-    setInterval(() => {
+    this.timer.setInterval(() => {
       this.planets.forEach((planet) => {
         if (planet && hasOwner(planet)) {
           this.updatePlanetToTime(planet, this.timer.now());
