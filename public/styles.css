@@ -1,3 +1,8 @@
+:root {
+  --df-background: #080808;
+  --df-color: #ffffff;
+}
+
 html,
 body,
 canvas,
