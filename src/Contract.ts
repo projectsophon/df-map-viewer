@@ -6,6 +6,7 @@ import {
   utils,
   Event,
   BigNumber as EthersBN,
+  providers
 } from 'ethers';
 import { EthereumAccountManager } from './EthereumAccountManager';
 import {
@@ -511,16 +512,15 @@ export class Contract extends events.EventEmitter {
     return this.coreContract.DISABLE_ZK_CHECK();
   }
 
-  async getPlayers(): Promise<PlayerMap> {
+  async getPlayers(blockTag: number): Promise<PlayerMap> {
     console.log('getting players');
-    const contract = this.coreContract;
-    const nPlayers: number = await contract.getNPlayers();
+    const nPlayers: number = await this.coreContract.callStatic.getNPlayers({ blockTag });
 
     const playerIds = await aggregateBulkGetter<EthAddress>(
       nPlayers,
       200,
       async (start, end) =>
-        (await contract.bulkGetPlayers(start, end)).map(address)
+        (await this.coreContract.callStatic.bulkGetPlayers(start, end, { blockTag })).map(address)
     );
 
     const playerMap: PlayerMap = {};
@@ -558,18 +558,16 @@ export class Contract extends events.EventEmitter {
     return events;
   }
 
-  async getAllArrivals(): Promise<QueuedArrival[]> {
+  async getAllArrivals(blockTag: number): Promise<QueuedArrival[]> {
     console.log('getting arrivals');
-    const contract = this.coreContract;
-
-    const nPlanets: number = await contract.getNPlanets();
+    const nPlanets: number = await this.coreContract.callStatic.getNPlanets({ blockTag });
 
     const arrivalsUnflattened = await aggregateBulkGetter<QueuedArrival[]>(
       nPlanets,
       1000,
       async (start, end) => {
         return (
-          await contract.bulkGetPlanetArrivals(start, end)
+          await this.coreContract.callStatic.bulkGetPlanetArrivals(start, end, { blockTag })
         ).map((arrivals: RawArrivalData[]) =>
           arrivals.map(this.rawArrivalToObject)
         );
@@ -580,16 +578,14 @@ export class Contract extends events.EventEmitter {
     return _.flatten(arrivalsUnflattened);
   }
 
-  async getPlanets(): Promise<PlanetMap> {
+  async getPlanets(blockTag: number): Promise<PlanetMap> {
     console.log('getting planets');
-    const contract = this.coreContract;
-
-    const nPlanets: number = await contract.getNPlanets();
+    const nPlanets: number = await this.coreContract.callStatic.getNPlanets({ blockTag });
 
     const planetIds = await aggregateBulkGetter<BigInteger>(
       nPlanets,
       2000,
-      async (start, end) => await contract.bulkGetPlanetIds(start, end),
+      async (start, end) => await this.coreContract.callStatic.bulkGetPlanetIds(start, end, { blockTag }),
       true
     );
 
@@ -599,14 +595,14 @@ export class Contract extends events.EventEmitter {
       nPlanets,
       1000,
       async (start, end) =>
-        await contract.bulkGetPlanetsExtendedInfo(start, end),
+        await this.coreContract.callStatic.bulkGetPlanetsExtendedInfo(start, end, { blockTag }),
       true
     );
 
     const rawPlanets = await aggregateBulkGetter<RawPlanetData>(
       nPlanets,
       1000,
-      async (start, end) => await contract.bulkGetPlanets(start, end),
+      async (start, end) => await this.coreContract.callStatic.bulkGetPlanets(start, end, { blockTag }),
       true
     );
 
@@ -758,5 +754,9 @@ export class Contract extends events.EventEmitter {
       beginBlockNumber,
       endBlockNumber,
     );
+  }
+
+  public async getBlock(blockTag: number): Promise<providers.Block> {
+    return this.coreContract.provider.getBlock(blockTag);
   }
 }
