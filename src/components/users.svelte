@@ -7,7 +7,9 @@
   };
 
   const selectHome = (home) => {
-    selectedPlanet.set(home);
+    if (home) {
+      selectedPlanet.set(home);
+    }
   };
 </script>
 
