@@ -8,12 +8,13 @@ import {
   QueuedArrival,
 } from './PlanetHelper';
 import { Viewport } from './Viewport';
-import { Planet } from './GlobalTypes';
+import { Planet, PlanetLevel } from './GlobalTypes';
 import { ReplayTimer } from './Timer';
 import { getAllTwitters } from './Twitter';
 import { getPlayerColor } from './Cosmetic';
 
 import { Event } from '@ethersproject/contracts';
+import { Result } from '@ethersproject/abi';
 import { users, speedMultiplier, selectedPlanet, blockInformation } from './components/stores.js';
 // @ts-ignore
 import App from './components/app.svelte';
@@ -31,9 +32,7 @@ const endTimeSeconds = 1609372800;
 
 const isReplay = true;
 
-const timer = new ReplayTimer();
-
-speedMultiplier.subscribe((multiplier) => timer.setSpeedMultiplier(multiplier));
+const cachedBlockTimes = new Map();
 
 async function start(startBlockNumber: number) {
   const canvas = document.querySelector('canvas');
@@ -77,7 +76,7 @@ async function start(startBlockNumber: number) {
   ]);
 
   async function* historicEvents(blockNumber: number) {
-    let chunk = 1000;
+    let chunk = 3000;
     let lastEndChunk = blockNumber;
     let idx = 0;
     let eventLogs: Event[] = [];
@@ -91,13 +90,23 @@ async function start(startBlockNumber: number) {
 
       let nextEvent = eventLogs[idx];
       if (nextEvent) {
-        idx++;
-        let block = await nextEvent.getBlock()
+        if (!cachedBlockTimes.has(nextEvent.blockNumber)) {
+          let block = await nextEvent.getBlock()
+          cachedBlockTimes.set(nextEvent.blockNumber, block.timestamp);
+        }
+        let eventsInBlock: { raw: Event, event?: string, args: Result }[] = []
+        for (let event of eventLogs.slice(idx)) {
+          if (event.blockNumber === nextEvent.blockNumber) {
+            eventsInBlock.push({ raw: event, event: event.event, args: event.args || [] });
+          } else {
+            break;
+          }
+        }
+        idx += eventsInBlock.length;
         yield {
-          raw: nextEvent,
-          event: nextEvent.event,
-          args: nextEvent.args || [],
-          timestamp: block.timestamp
+          timestamp: cachedBlockTimes.get(nextEvent.blockNumber),
+          blockNumber: nextEvent.blockNumber,
+          events: eventsInBlock,
         }
       }
     }
@@ -105,15 +114,17 @@ async function start(startBlockNumber: number) {
 
   const [
     worldRadius,
-    allArrivals = [] as QueuedArrival[],
-    planets = new Map(),
+    allArrivals,
+    planets,
+    players,
   ] = await Promise.all([
     contractsAPI.getWorldRadius(startBlockNumber),
-    Promise.resolve(),
-    // contractsAPI.getAllArrivals(),
-    Promise.resolve(),
-    // contractsAPI.getPlanets(),
+    contractsAPI.getAllArrivals(startBlockNumber),
+    contractsAPI.getPlanets(startBlockNumber),
+    contractsAPI.getPlayers(startBlockNumber),
   ]);
+
+  const block = await contractsAPI.getBlock(startBlockNumber);
 
   console.log('world radius', worldRadius);
 
@@ -133,6 +144,8 @@ async function start(startBlockNumber: number) {
 
   canvas.height = window.innerHeight;
   canvas.width = window.innerWidth;
+
+  const timer = new ReplayTimer(block.timestamp * 1000);
 
   const planetHelper = new PlanetHelper(
     planets,
@@ -174,23 +187,48 @@ async function start(startBlockNumber: number) {
     users.update(users => users.concat({ address, twitter, homePlanet, color }))
   });
 
+  // @ts-ignore
+  users.update((_users) => {
+    return Object.values(players).map((player) => {
+      const { address } = player;
+      const twitter = twitters[address];
+      const color = getPlayerColor(address);
+      // Their oldest level 0 planet is the best we can guess
+      let homePlanet = planetHelper.getPlanetsByOwner(address).reduce((oldest, planet) => {
+        if (planet.planetLevel === PlanetLevel.MIN && planet.createdAt && oldest.createdAt) {
+          return planet.createdAt < oldest.createdAt ? planet : oldest
+        } else {
+          return oldest
+        }
+      })
+      // console.log(homePlanet);
+      return { address, twitter, homePlanet, color }
+    });
+  });
+
   contractsAPI.on(ContractsAPIEvent.RadiusUpdated, async (newRadius: number) => {
     // TODO: Maybe this should go in Viewport
     renderer.worldRadius = newRadius;
   });
 
   selectedPlanet.subscribe((planet) => viewport.centerPlanet(planet));
+  speedMultiplier.subscribe((multiplier) => timer.setSpeedMultiplier(multiplier));
 
-  for await (const { raw, event, args, timestamp } of historicEvents(startBlockNumber)) {
+  for await (const { timestamp, blockNumber, events } of historicEvents(startBlockNumber)) {
+    // console.log(new Date(timestamp * 1000), new Date(timer.now()));
     await timer.waitForBlockNumber(timestamp);
     // We want to know the time of each block, instead of the timer that is running
     // This is a blockchain timestamp, which is in seconds
-    blockInformation.set({ number: raw.blockNumber, date: new Date(timestamp * 1000) });
-    contractsAPI.emit.apply(contractsAPI, [event, ...args, raw]);
+    blockInformation.set({ number: blockNumber, date: new Date(timestamp * 1000) });
+
+    for (let { raw, event, args } of events) {
+      // To avoid blocking the iter on these
+      window.queueMicrotask(() => contractsAPI.emit.apply(contractsAPI, [event, ...args, raw]))
+    }
   }
 }
 
-start(firstReplayBlock).then(console.log).catch(console.log);
+start(firstReplayBlock + 20000).then(console.log).catch(console.log);
 
 const svelteApp = new App({
   target: document.getElementById("ui"),
