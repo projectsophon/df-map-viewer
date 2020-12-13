@@ -174,13 +174,19 @@ export class PlanetHelper {
     this.planetArrivalIds = planetArrivalIds;
 
     // set interval to update all planets every 120s
-    this.timer.setInterval(() => {
-      this.planets.forEach((planet) => {
-        if (planet && hasOwner(planet)) {
-          this.updatePlanetToTime(planet, this.timer.now());
-        }
-      });
-    }, 120000);
+    this.timer.setInterval(() => this.updateAllPlanets(), 120000);
+  }
+
+  public updateAllPlanets() {
+    this.planets.forEach((planet) => {
+      if (planet && hasOwner(planet)) {
+        this.updatePlanetToTime(planet, this.timer.now());
+      }
+    });
+  }
+
+  public getPlanetsByOwner(address: EthAddress) {
+    return this.getAllOwnedPlanets().filter((planet) => planet.owner === address);
   }
 
   public getExploredChunks(): Iterable<ExploredChunkData> {
