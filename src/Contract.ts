@@ -336,9 +336,9 @@ export class Contract extends events.EventEmitter {
     this.coreContract = coreContract;
   }
 
-  static async create(isReplay = false): Promise<Contract> {
+  static async create(isReplay = false, isNode = false): Promise<Contract> {
     const ethConnection = new EthereumAccountManager()
-    const coreContract: CoreContract = await ethConnection.loadCoreContract();
+    const coreContract: CoreContract = await ethConnection.loadCoreContract(isNode);
 
     const contract: Contract = new Contract(coreContract);
     contract.setupEventListeners();
