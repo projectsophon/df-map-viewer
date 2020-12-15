@@ -84,47 +84,18 @@ export class Viewport extends events.EventEmitter {
 
     this.centerCoords(centerWorldCoords);
 
-    let onMouseEvent = (emitEventName: UIEvent, mouseEvent: MouseEvent) => {
-      const rect = canvas.getBoundingClientRect();
-      const canvasX = mouseEvent.clientX - rect.left;
-      const canvasY = mouseEvent.clientY - rect.top;
-      this.emit(emitEventName, { x: canvasX, y: canvasY });
-    }
-
-    const onMouseDown = (e: MouseEvent) => {
-      onMouseEvent(UIEvent.CanvasMouseDown, e);
-    };
-    // this is the root of the mousemove event
-    const onMouseMove = (e: MouseEvent) => {
-      onMouseEvent(UIEvent.CanvasMouseMove, e);
-    };
-    const onMouseUp = (e: MouseEvent) => {
-      onMouseEvent(UIEvent.CanvasMouseUp, e);
-    };
-    // TODO convert this to mouseleave
-    const onMouseOut = () => {
-      this.emit(UIEvent.CanvasMouseOut);
-    };
-
-    const throttledWheel = _.throttle((e) => {
+    // @ts-ignore
+    this._throttledWheel = _.throttle((e) => {
       const { deltaY } = e;
       this.emit(UIEvent.CanvasScroll, deltaY);
     }, 10);
-    function onWheel(e: WheelEvent) {
-      e.preventDefault();
-      throttledWheel(e);
-    }
-    let onResize = () => {
-      console.log('resize');
-      this.emit(UIEvent.WindowResize);
-    }
 
-    canvas.addEventListener('mousedown', onMouseDown);
-    canvas.addEventListener('mousemove', onMouseMove);
-    canvas.addEventListener('mouseup', onMouseUp);
-    canvas.addEventListener('mouseout', onMouseOut);
-    canvas.addEventListener('wheel', onWheel);
-    window.addEventListener('resize', onResize);
+    canvas.addEventListener('mousedown', this._canvas_onMouseDown);
+    canvas.addEventListener('mousemove', this._canvas_onMouseMove);
+    canvas.addEventListener('mouseup', this._canvas_onMouseUp);
+    canvas.addEventListener('mouseout', this._canvas_onMouseOut);
+    canvas.addEventListener('wheel', this._canvas_onWheel);
+    window.addEventListener('resize', this._window_onResize);
 
     this
       .on(UIEvent.CanvasMouseDown, this.onMouseDown)
@@ -136,6 +107,46 @@ export class Viewport extends events.EventEmitter {
       .on(UIEvent.CenterPlanet, this.centerPlanet)
       .on(UIEvent.ZoomIn, this.zoomIn)
       .on(UIEvent.ZoomOut, this.zoomOut);
+  }
+
+  _canvas_onMouseEvent(emitEventName: UIEvent, mouseEvent: MouseEvent) {
+    const rect = this.canvas.getBoundingClientRect();
+    const canvasX = mouseEvent.clientX - rect.left;
+    const canvasY = mouseEvent.clientY - rect.top;
+    this.emit(emitEventName, { x: canvasX, y: canvasY });
+  }
+
+  _canvas_onMouseDown = (e: MouseEvent) => {
+    this._canvas_onMouseEvent(UIEvent.CanvasMouseDown, e);
+  };
+  // this is the root of the mousemove event
+  _canvas_onMouseMove = (e: MouseEvent) => {
+    this._canvas_onMouseEvent(UIEvent.CanvasMouseMove, e);
+  };
+  _canvas_onMouseUp = (e: MouseEvent) => {
+    this._canvas_onMouseEvent(UIEvent.CanvasMouseUp, e);
+  };
+  // TODO convert this to mouseleave
+  _canvas_onMouseOut = () => {
+    this.emit(UIEvent.CanvasMouseOut);
+  };
+
+  _canvas_onWheel = (e: WheelEvent) => {
+    e.preventDefault();
+    // @ts-ignore
+    this._throttledWheel(e);
+  }
+  _window_onResize = () => {
+    this.emit(UIEvent.WindowResize);
+  }
+
+  destroy() {
+    this.canvas.removeEventListener('mousedown', this._canvas_onMouseDown);
+    this.canvas.removeEventListener('mousemove', this._canvas_onMouseMove);
+    this.canvas.removeEventListener('mouseup', this._canvas_onMouseUp);
+    this.canvas.removeEventListener('mouseout', this._canvas_onMouseOut);
+    this.canvas.removeEventListener('wheel', this._canvas_onWheel);
+    window.removeEventListener('resize', this._window_onResize);
   }
 
   centerPlanet(planet: Planet | null): void {
