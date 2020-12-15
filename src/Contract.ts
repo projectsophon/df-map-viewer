@@ -393,10 +393,15 @@ export class Contract extends events.EventEmitter {
       .on(
         ContractEvent.ArrivalQueued,
         async (arrivalId: EthersBN, evt: Event) => {
-          const arrival: QueuedArrival | null = await this.getArrival(
-            arrivalId.toNumber(),
-            evt.blockNumber
-          );
+          let arrival: QueuedArrival | null = null;
+          try {
+            arrival = await this.getArrival(
+              arrivalId.toNumber(),
+              evt.blockNumber
+            );
+          } catch (err) {
+            console.log('could not get arrival', evt, err);
+          }
           if (!arrival) {
             console.error('arrival is null');
             return;
