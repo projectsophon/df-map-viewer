@@ -121,6 +121,7 @@ export class PlanetHelper {
   private chunkStore: ChunkStore;
 
   private timer: Timer;
+  private _intervalId: number;
 
   constructor(
     planets: PlanetMap,
@@ -174,7 +175,14 @@ export class PlanetHelper {
     this.planetArrivalIds = planetArrivalIds;
 
     // set interval to update all planets every 120s
-    this.timer.setInterval(() => this.updateAllPlanets(), 120000);
+    this._intervalId = this.timer.setInterval(() => this.updateAllPlanets(), 120000);
+  }
+
+  destroy() {
+    if (this._intervalId) {
+      this.timer.clearInterval(this._intervalId);
+    }
+    this.clearAllArrivals();
   }
 
   public updateAllPlanets() {
@@ -423,6 +431,22 @@ export class PlanetHelper {
       }
     }
     return arrivalsWithTimers;
+  }
+
+  private clearAllArrivals() {
+    for (let planetId of Object.keys(this.planetArrivalIds)) {
+      // clear if the planet already had stored arrivals
+      for (const arrivalId of this.planetArrivalIds[planetId]) {
+        const arrivalWithTimer = this.arrivals[arrivalId];
+        if (arrivalWithTimer) {
+          this.timer.clearTimeout(arrivalWithTimer.timer);
+        } else {
+          console.error(`arrival with id ${arrivalId} wasn't found`);
+        }
+        delete this.arrivals[arrivalId];
+      }
+      this.planetArrivalIds[planetId] = [];
+    }
   }
 
   private clearOldArrivals(planet: Planet): void {
