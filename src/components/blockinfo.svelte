@@ -12,12 +12,18 @@
   }
 </style>
 
-<Modal {position}>
-  <div>
-    Block number:
-    <a
-      href="https://blockscout.com/poa/xdai/blocks/{$blockInformation.number}"
-      target="_blank">{$blockInformation.number}</a>
-  </div>
-  <div>At: {$blockInformation.date.toLocaleString()}</div>
-</Modal>
+{#if $blockInformation}
+  <Modal {position}>
+    {#if $blockInformation.number}
+      <div>
+        Block number:
+        <a
+          href="https://blockscout.com/poa/xdai/blocks/{$blockInformation.number}"
+          target="_blank">{$blockInformation.number}</a>
+      </div>
+    {/if}
+    {#if $blockInformation.date}
+      <div>At: {$blockInformation.date.toLocaleString()}</div>
+    {/if}
+  </Modal>
+{/if}
