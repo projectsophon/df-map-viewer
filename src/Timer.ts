@@ -11,71 +11,95 @@ export interface Timer {
 export class ReplayTimer implements Timer {
   speedMultiplier: number;
 
+  paused: boolean;
+
   _now: number;
 
-  _rafStart: number;
+  _raf?: number;
+  _rafStart?: number;
   _elapsed: number;
 
   _timerId: number;
   _timeouts: Map<number, [number, () => void]>;
   _intervals: Map<number, [number, number, () => void]>;
+  _blockTimers: Map<number, [number, () => void]>;
 
-  constructor(startTime: number = 1601677525 * 1000) {
-    // TODO: Parameterize?
-    this.speedMultiplier = 10;
+  constructor(startTime: number, speedMultiplier: number) {
+    this.speedMultiplier = speedMultiplier;
     this._elapsed = 0;
     this._now = startTime;
     this._timerId = 0;
     this._timeouts = new Map();
     this._intervals = new Map();
-
-    this._tick();
+    this._blockTimers = new Map();
+    this.paused = true;
   }
 
   _tick() {
-    window.requestAnimationFrame((timestamp) => {
+    this._raf = window.requestAnimationFrame((timestamp: number) => {
+      this._tick();
+
       if (this._rafStart === undefined) {
         this._rafStart = timestamp;
       }
-      let tick = timestamp - this._rafStart - this._elapsed;
-      this._now += (tick * this.speedMultiplier);
-      this._elapsed += tick;
 
+      let tick = (timestamp - this._rafStart - this._elapsed);
+      let now = this._now + (tick * this.speedMultiplier);
+
+      for (let [id, [timeout, timeoutFn]] of this._blockTimers.entries()) {
+        // If the timeout is now or in the past, run it and remove it from our list
+        if (timeout <= now) {
+          now = timeout;
+          timeoutFn()
+          this._blockTimers.delete(id);
+        }
+      }
       for (let [id, [timeout, timeoutFn]] of this._timeouts.entries()) {
         // If the timeout is now or in the past, run it and remove it from our list
-        if (timeout <= this._now) {
+        if (timeout <= now) {
           timeoutFn()
           this._timeouts.delete(id);
         }
       }
       for (let [id, [interval, ms, intervalFn]] of this._intervals.entries()) {
         // If the interval is now or in the past, run it and update the interval
-        if (interval <= this._now) {
+        if (interval <= now) {
           intervalFn()
-          this._intervals.set(id, [this._now + ms, ms, intervalFn]);
+          this._intervals.set(id, [now + ms, ms, intervalFn]);
         }
       }
 
-      this._tick();
+      this._now = now;
+      this._elapsed += tick;
     });
   }
 
-  waitForBlockNumber(blockTimestamp: number) {
-    let timestamp = blockTimestamp * 1000;
-    return new Promise((resolve: () => void) => {
-      this._timerId++;
+  destroy() {
+    this.stop();
+    this._timeouts = new Map();
+    this._intervals = new Map();
+    this._blockTimers = new Map();
+  }
 
-      let fn = () => {
-        // There's a little stuttering from this re-center so only do it if the gap is big-ish
-        if (this._now > 1000 * this.speedMultiplier + timestamp) {
-          console.log('[DEBUG] Re-centered because ReplayTimer is %dms ahead', this._now - timestamp);
-          this._now = timestamp;
-        }
-        resolve();
-      };
+  stop() {
+    if (this._raf) {
+      window.cancelAnimationFrame(this._raf);
+      this._raf = undefined;
+      this._rafStart = undefined;
+    }
+    this.paused = true;
+  }
 
-      this._timeouts.set(this._timerId, [timestamp, fn])
-    });
+  start() {
+    if (this.paused) {
+      this.paused = false;
+      this._tick();
+    }
+  }
+
+  registerBlock(timestamp: number, fn: () => void) {
+    this._timerId++;
+    this._blockTimers.set(this._timerId, [timestamp, fn])
   }
 
   now(): number {

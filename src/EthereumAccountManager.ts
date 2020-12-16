@@ -60,11 +60,15 @@ export class EthereumAccountManager extends events.EventEmitter {
     return new Contract(contractAddress, contractABI, this.provider);
   }
 
-  public async loadCoreContract(): Promise<Contract> {
-    const contractABI = (
-      await fetch('/contracts/DarkForestCore.json').then((x) => x.json())
-    ).abi;
-
+  public async loadCoreContract(isNode: boolean = false): Promise<Contract> {
+    let contractABI;
+    if (isNode) {
+      contractABI = require('../public/contracts/DarkForestCore.json').abi;
+    } else {
+      contractABI = (
+        await fetch('/contracts/DarkForestCore.json').then((x) => x.json())
+      ).abi;
+    }
     return this.loadContract(contractAddress, contractABI);
   }
 }

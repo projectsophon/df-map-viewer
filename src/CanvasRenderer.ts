@@ -54,7 +54,7 @@ export class CanvasRenderer {
 
   canvas: HTMLCanvasElement;
   ctx: CanvasRenderingContext2D;
-  frameRequestId: number;
+  frameRequestId?: number;
   worldRadius: number;
   perlinThreshold1: number;
   perlinThreshold2: number;
@@ -94,6 +94,23 @@ export class CanvasRenderer {
     this.selected = null;
 
     this.frame();
+  }
+
+  destroy() {
+    if (this.frameRequestId) {
+      window.cancelAnimationFrame(this.frameRequestId)
+      this.frameRequestId = undefined;
+    }
+    this.ctx.save();
+    this.ctx.fillStyle = 'black';
+    this.ctx.globalAlpha = 0.5;
+    this.ctx.fillRect(0, 0, this.viewport.viewportWidth, this.viewport.viewportHeight);
+    this.ctx.restore();
+    this.drawText(
+      'Seeking... Loading game state... This may take awhile...',
+      18,
+      this.viewport.centerWorldCoords
+    );
   }
 
   private draw() {

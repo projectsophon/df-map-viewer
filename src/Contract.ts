@@ -336,9 +336,9 @@ export class Contract extends events.EventEmitter {
     this.coreContract = coreContract;
   }
 
-  static async create(isReplay = false): Promise<Contract> {
+  static async create(isReplay = false, isNode = false): Promise<Contract> {
     const ethConnection = new EthereumAccountManager()
-    const coreContract: CoreContract = await ethConnection.loadCoreContract();
+    const coreContract: CoreContract = await ethConnection.loadCoreContract(isNode);
 
     const contract: Contract = new Contract(coreContract);
     contract.setupEventListeners();
@@ -393,10 +393,15 @@ export class Contract extends events.EventEmitter {
       .on(
         ContractEvent.ArrivalQueued,
         async (arrivalId: EthersBN, evt: Event) => {
-          const arrival: QueuedArrival | null = await this.getArrival(
-            arrivalId.toNumber(),
-            evt.blockNumber
-          );
+          let arrival: QueuedArrival | null = null;
+          try {
+            arrival = await this.getArrival(
+              arrivalId.toNumber(),
+              evt.blockNumber
+            );
+          } catch (err) {
+            console.log('could not get arrival', evt, err);
+          }
           if (!arrival) {
             console.error('arrival is null');
             return;
