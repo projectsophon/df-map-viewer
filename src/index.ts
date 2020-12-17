@@ -105,7 +105,7 @@ async function start() {
     }
     if (init || seeking) {
       rebootWithBlockNumber = blockNumber
-      historicEvents = new HistoricEvents(rebootWithBlockNumber, contractsAPI, blocktimes, 3000);
+      historicEvents = new HistoricEvents(rebootWithBlockNumber, contractsAPI, blocktimes, 1000);
     }
   });
 

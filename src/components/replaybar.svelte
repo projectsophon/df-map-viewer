@@ -3,7 +3,7 @@
   import { speedMultiplier, playing } from "./stores.js";
 
   const increaseSpeed = () => {
-    speedMultiplier.update((speed) => Math.min(speed + 1, 100));
+    speedMultiplier.update((speed) => Math.min(speed + 1, 25));
   };
 
   const decreaseSpeed = () => {
@@ -27,6 +27,7 @@
     background: var(--df-background);
     color: var(--df-color);
     border: 1px solid var(--df-color);
+    cursor: pointer;
   }
 
   .playing {

@@ -78,14 +78,15 @@ export class HistoricEvents {
           this.cachedBlockTimes.set(nextEvent.blockNumber, block.timestamp * 1000);
         }
         let eventsInBlock: { raw: Event, event?: string, args: Result }[] = []
-        for (let event of eventLogs.slice(idx)) {
+        eventLogs = eventLogs.slice(idx);
+        for (let event of eventLogs) {
           if (event.blockNumber === nextEvent.blockNumber) {
             eventsInBlock.push({ raw: event, event: event.event, args: event.args || [] });
           } else {
             break;
           }
         }
-        idx += eventsInBlock.length;
+        idx = eventsInBlock.length;
         yield {
           timestamp: this.cachedBlockTimes.get(nextEvent.blockNumber),
           blockNumber: nextEvent.blockNumber,
